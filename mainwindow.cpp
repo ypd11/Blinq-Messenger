@@ -1067,7 +1067,7 @@ void MainWindow::buildMenus()
     }
     auto *helpMenu = menuBar()->addMenu(tr("&Help"));
     auto *getHelp = helpMenu->addAction(QIcon(QStringLiteral(":/icons/assets/help.png")), tr("Get Help"));
-    auto *checkUpdates = helpMenu->addAction(tr("Check for Updates"));
+    auto *checkUpdates = helpMenu->addAction(QIcon(QStringLiteral(":/icons/assets/updates.png")), tr("Check for Updates"));
     auto *about = helpMenu->addAction(QIcon(QStringLiteral(":/icons/assets/about.png")), tr("About Blinq Messenger"));
 
     connect(changeName, &QAction::triggered, this, &MainWindow::changeDisplayName);
