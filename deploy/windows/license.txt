@@ -1,0 +1,31 @@
+Blinq Messenger Freeware License
+
+Blinq Messenger is provided as freeware by Exe Innovate. You may use the application to communicate, share messages, send files, and use LAN or Internet chat features for personal or business work.
+
+Responsible use
+
+You are responsible for the messages, files, images, drawings, profile information, and other content you send or receive with the application. Do not use Blinq Messenger to harass, impersonate, distribute illegal content, invade privacy, violate workplace or school rules, or break any applicable law.
+
+Exe Innovate is not responsible for how users choose to use the application, for content exchanged between users, or for consequences caused by misuse, unauthorized sharing, offensive messages, unsafe files, or communication with unintended recipients.
+
+Network, accounts, and privacy
+
+LAN Mode is designed for local-network communication and peer discovery. Users are responsible for choosing trusted networks, configuring firewall rules, and verifying who they communicate with.
+
+Internet Mode uses a Blinq account and server connection to reach approved contacts outside the LAN. Users are responsible for protecting their account credentials, choosing contacts carefully, and following applicable rules for remote communication.
+
+Files and security
+
+Always be careful with files received from other users. Exe Innovate is not responsible for data loss, malware, unwanted files, disclosure of private information, or damage caused by files, images, links, or content exchanged through the app.
+
+Included components
+
+The application includes its own code and third-party components, including Qt libraries and interface resources. Those components remain subject to their respective licenses.
+
+No warranty
+
+The software is provided as-is, without warranty of any kind. Exe Innovate does not guarantee uninterrupted communication, message delivery, compatibility, security, or fitness for a particular purpose.
+
+Redistribution
+
+Redistribution is allowed only when the application remains unmodified and credited to Exe Innovate. Commercial resale, reverse branding, or claiming authorship is not permitted.

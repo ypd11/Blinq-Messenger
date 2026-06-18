@@ -1,0 +1,43 @@
+<RCC>
+    <qresource prefix="/icons">
+        <file>assets/appicon.ico</file>
+        <file>assets/emoji.png</file>
+        <file>assets/send.png</file>
+        <file>assets/attachment.png</file>
+        <file>assets/html.png</file>
+        <file>assets/whistle.png</file>
+        <file>assets/avatar.png</file>
+        <file>assets/clear_history.png</file>
+        <file>assets/display_name.png</file>
+        <file>assets/direct_connect.png</file>
+        <file>assets/block_user.png</file>
+        <file>assets/send_file.png</file>
+        <file>assets/connection_info.png</file>
+        <file>assets/contact_info.png</file>
+        <file>assets/groups.png</file>
+        <file>assets/about.png</file>
+        <file>assets/help.png</file>
+        <file>assets/public_chat.png</file>
+        <file>assets/open_chat.png</file>
+        <file>assets/exit.png</file>
+        <file>assets/settings.png</file>
+        <file>assets/mute.png</file>
+        <file>assets/unmute.png</file>
+        <file>assets/favorite.png</file>
+        <file>assets/unfavorite.png</file>
+        <file>assets/add.png</file>
+        <file>assets/remove_from_group.png</file>
+        <file>assets/game.png</file>
+        <file>assets/drawing.png</file>
+        <file>assets/copy.png</file>
+        <file>assets/reconnect.png</file>
+        <file>assets/scan.png</file>
+        <file>assets/firewall.png</file>
+    </qresource>
+    <qresource prefix="/sounds">
+        <file>assets/chat_sent.wav</file>
+        <file>assets/chat_received.wav</file>
+        <file>assets/chat_notification.wav</file>
+        <file>assets/whistle.wav</file>
+    </qresource>
+</RCC>

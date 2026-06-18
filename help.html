@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Blinq Messenger Help</title>
+  <style>
+    :root {
+      --accent: #1d9bf0;
+      --accent-dark: #0f6fb8;
+      --soft: #eaf7ff;
+      --hover: #dff2ff;
+      --border: #bde3ff;
+      --ink: #0f172a;
+      --muted: #64748b;
+      --panel: #ffffff;
+      --page: #eef5ff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      line-height: 1.55;
+      color: var(--ink);
+      background: linear-gradient(180deg, var(--page), #ffffff 48%, #f8fbff);
+    }
+    .shell {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 28px;
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: 76px 1fr;
+      gap: 18px;
+      align-items: center;
+      padding: 24px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: linear-gradient(135deg, #ffffff, var(--hover));
+      box-shadow: 0 18px 45px rgba(15, 111, 184, 0.14);
+    }
+    .hero img {
+      width: 72px;
+      height: 72px;
+    }
+    h1 {
+      margin: 0 0 4px;
+      font-size: 34px;
+      letter-spacing: 0;
+    }
+    .subtitle {
+      margin: 0;
+      color: #334155;
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 18px 0 24px;
+    }
+    .nav a {
+      color: var(--accent-dark);
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 7px 12px;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 13px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+    section, .card {
+      background: rgba(255,255,255,0.92);
+      border: 1px solid #d6e5f4;
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+    }
+    section { margin-top: 16px; }
+    h2 {
+      margin: 0 0 10px;
+      color: #123066;
+      font-size: 22px;
+    }
+    h3 {
+      margin: 14px 0 6px;
+      color: #0f2748;
+      font-size: 16px;
+    }
+    p { margin: 0 0 10px; }
+    ul, ol { margin: 8px 0 0 20px; padding: 0; }
+    li { margin: 5px 0; }
+    code {
+      background: #eef6ff;
+      border: 1px solid #d7e8ff;
+      border-radius: 5px;
+      padding: 1px 5px;
+      color: #0f6fb8;
+      font-family: Consolas, "Segoe UI Mono", monospace;
+      font-size: 0.95em;
+    }
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: var(--soft);
+      padding: 12px 14px;
+      border-radius: 10px;
+      margin-top: 12px;
+    }
+    .feature-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .feature {
+      border: 1px solid #dbeafe;
+      border-radius: 10px;
+      padding: 10px;
+      background: #fbfdff;
+    }
+    .feature strong { color: #0f6fb8; }
+    .faq details {
+      border-top: 1px solid #dbe7f3;
+      padding: 12px 0;
+    }
+    .faq details:first-of-type { border-top: none; }
+    summary {
+      cursor: pointer;
+      font-weight: 800;
+      color: #123066;
+    }
+    .footer {
+      color: var(--muted);
+      text-align: center;
+      font-size: 12px;
+      margin: 24px 0 4px;
+    }
+    @media (max-width: 760px) {
+      .shell { padding: 16px; }
+      .hero { grid-template-columns: 1fr; text-align: center; justify-items: center; }
+      .grid, .feature-list { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <img src="assets/appicon.ico" alt="Blinq Messenger icon">
+      <div>
+        <h1>Blinq Messenger Help</h1>
+        <p class="subtitle">A freeware LAN and Internet messenger.</p>
+      </div>
+    </header>
+
+    <nav class="nav" aria-label="Help sections">
+      <a href="#start">Start</a>
+      <a href="#profile">Profile</a>
+      <a href="#chat">Chat</a>
+      <a href="#files">Files</a>
+      <a href="#drawing">Drawing</a>
+      <a href="#groups">Groups</a>
+      <a href="#internet">Internet</a>
+      <a href="#themes">Themes</a>
+      <a href="#network">Network</a>
+      <a href="#settings">Settings</a>
+      <a href="#updates">Updates</a>
+      <a href="#faq">FAQ</a>
+      <a href="#license">License</a>
+    </nav>
+
+    <section id="start">
+      <h2>Getting Started</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>1. Open Blinq Messenger</h3>
+          <p>Run Blinq Messenger on two or more computers connected to the same private Wi-Fi or Ethernet network, or switch to Internet Mode to use a Blinq account with approved remote contacts.</p>
+        </div>
+        <div class="card">
+          <h3>2. Allow the firewall prompt</h3>
+          <p>When Windows Firewall asks, allow Blinq Messenger on <strong>Private networks</strong>. Local discovery may not work on Guest Wi-Fi or restricted VPN networks.</p>
+        </div>
+        <div class="card">
+          <h3>3. Find contacts</h3>
+          <p>In LAN Mode, contacts appear automatically when they are running Blinq Messenger on the same LAN and are not Invisible. In Internet Mode, add contacts by Blinq ID.</p>
+        </div>
+        <div class="card">
+          <h3>4. Start chatting</h3>
+          <p>Double-click a contact, or right-click and choose <code>Open Chat</code>.</p>
+        </div>
+      </div>
+      <div class="callout">LAN Mode discovers peers locally and sends messages directly between devices whenever possible. Internet Mode uses the Blinq Internet service for account-based remote private chat.</div>
+    </section>
+
+    <section id="profile">
+      <h2>Profile and Status</h2>
+      <p>Your profile panel shows your avatar, display name, personal message, current status, and optional playing media.</p>
+      <ul>
+        <li>Use <code>Profile &gt; Change Display Name</code> or the small edit button in the profile panel to rename yourself.</li>
+        <li>Use <code>Profile &gt; Set Avatar</code> to choose your display picture.</li>
+        <li>Edit the personal message directly in the top panel. The default is <code>Hi, let's chat!</code>.</li>
+        <li>Use the status dropdown for Available, Busy, Away, Do Not Disturb, Invisible, or custom status messages.</li>
+        <li>When enabled, Blinq Messenger can show Windows media playback as <code>Playing: ...</code>.</li>
+      </ul>
+    </section>
+
+    <section id="chat">
+      <h2>Private and Public Chat</h2>
+      <div class="feature-list">
+        <div class="feature"><strong>Private chat</strong><br>Double-click a contact, type a message, and press Enter or click Send. Private chat works in LAN Mode and Internet Mode.</div>
+        <div class="feature"><strong>Public chat</strong><br>Use <code>Chat &gt; Public Chat</code> for a LAN-wide room. Public chat is a LAN Mode feature.</div>
+        <div class="feature"><strong>Rich messages</strong><br>Use the rich-message button to style text with font, size, bold, italic, underline, and color.</div>
+        <div class="feature"><strong>Emoji</strong><br>Use the emoji button to insert expressive characters into chat.</div>
+        <div class="feature"><strong>Conversation search</strong><br>Use the Find button or press <code>Ctrl+F</code> inside a private chat to search that conversation.</div>
+        <div class="feature"><strong>Whistle</strong><br>Send a quick attention sound to a contact.</div>
+        <div class="feature"><strong>Typing and read status</strong><br>Contacts can see typing state and message receipts when available.</div>
+      </div>
+    </section>
+
+    <section id="files">
+      <h2>Files and Images</h2>
+      <p>Use the attachment button in a private chat or right-click a contact and choose <code>Send File</code>.</p>
+      <ul>
+        <li>Images that can be displayed in chat are sent directly and shown inline.</li>
+        <li>Other files ask the receiver for acceptance before transfer.</li>
+        <li>Received files are saved in Downloads under <code>Blinq Messenger Received</code>.</li>
+        <li>Be careful with files from other users. Only open files from people and networks you trust.</li>
+      </ul>
+    </section>
+
+    <section id="drawing">
+      <h2>Drawing Pad</h2>
+      <p>The drawing button in a private chat opens a small drawing pad. Drawings are sent as images and appear directly in the chat.</p>
+      <ul>
+        <li>Use color swatches or the Color button to choose ink.</li>
+        <li>Use the size slider to change brush size.</li>
+        <li>Use Pen or Eraser, plus Undo, Redo, and Clear.</li>
+        <li>Click <code>Send Drawing</code> to send the image.</li>
+      </ul>
+    </section>
+
+    <section id="groups">
+      <h2>Contacts, Groups, Favorites, and Blocking</h2>
+      <p>The contact list is organized into Favorites, custom groups, Online, Away / Idle, Busy, and Offline.</p>
+      <ul>
+        <li>Right-click a contact to open chat, view contact info, send a file, whistle, favorite, move to a group, clear history, or block.</li>
+        <li>Drag contacts between custom groups.</li>
+        <li>Use <code>Chat &gt; Manage Contact Groups...</code> to create, rename, or delete custom groups.</li>
+        <li>Blocked users are hidden and their messages/files/public chat posts are ignored.</li>
+      </ul>
+    </section>
+
+    <section id="internet">
+      <h2>Internet Mode</h2>
+      <p>Internet Mode lets you sign in with a Blinq ID and chat privately with approved contacts through the Blinq Internet service.</p>
+      <ul>
+        <li>Use <code>Profile &gt; Switch to Internet Mode</code> to sign in or create a Blinq account.</li>
+        <li>Use <code>Chat &gt; Add Contact...</code> to search by display name or Blinq ID, or to add someone directly when you already know their full Blinq ID.</li>
+        <li>Internet contacts can exchange private messages, images, typing state, read receipts, whistles, profile details, and presence when the server is reachable.</li>
+        <li>Use <code>Profile &gt; Settings</code> and turn off <code>Allow people to find me in Internet search</code> if you only want people to add you when you share your Blinq ID yourself.</li>
+        <li>LAN-only tools such as Public Chat, Direct Connect by IP, LAN groups, subnet scan, and firewall helpers are available in LAN Mode.</li>
+        <li>If the Internet server is unavailable, Blinq Messenger can return to LAN Mode so local chat remains usable.</li>
+      </ul>
+    </section>
+
+    <section id="themes">
+      <h2>Themes</h2>
+      <p>Use the <code>Theme</code> menu to change the app globally. Open chat windows update live, and contacts can share their theme color so their avatar frame appears in their chosen color.</p>
+      <p>Current theme choices include Sky, Aqua, Mint, Rose, Sunset, Violet, Orchid, Ruby, Midnight, and Graphite.</p>
+    </section>
+
+    <section id="settings">
+      <h2>Settings and Tray</h2>
+      <ul>
+        <li>Open <code>Profile &gt; Settings</code> to adjust behavior, sounds, notifications, history, startup, and blocked users.</li>
+        <li>Enable <code>Hide my typing indicator</code> if you do not want contacts to see when you are typing.</li>
+        <li>Disable <code>Allow people to find me in Internet search</code> to opt out of Internet Mode account discovery.</li>
+        <li>Enable <code>Send an away auto-reply</code> to reply once every few minutes per contact while your status is Away, Busy, Idle, or a custom status.</li>
+        <li>Blinq Messenger can keep running in the system tray near the clock.</li>
+      </ul>
+    </section>
+
+    <section id="updates">
+      <h2>Updates and Backups</h2>
+      <ul>
+        <li>Use <code>Help &gt; Check for Updates</code> to check the official update file, read the changelog, and download a newer installer when one is available.</li>
+        <li>After downloading an update, use <code>Run Installer</code> to close Blinq Messenger and start the installer automatically.</li>
+        <li>Use <code>Profile &gt; Settings &gt; Reset &gt; Backup Data</code> to export your settings and chat history to a <code>.blinqbackup</code> file.</li>
+        <li>Use <code>Profile &gt; Settings &gt; Reset &gt; Restore Data</code> to import a backup file. Restoring replaces current settings and chat history, then restarts the app automatically.</li>
+        <li>The installer is designed to keep user data, but keeping a backup before major updates is recommended.</li>
+      </ul>
+    </section>
+
+    <section id="network">
+      <h2>Network and Ports</h2>
+      <p>In LAN Mode, Blinq Messenger uses a local UDP discovery channel to find nearby users, then direct TCP connections for private messages, file transfers, drawings, and direct-connect handshakes. In Internet Mode, private chat uses the configured Blinq Internet server.</p>
+      <ul>
+        <li>Use <code>Chat &gt; Network Diagnostics</code> to see the actual LAN discovery state and the TCP port this copy of Blinq Messenger is using right now.</li>
+        <li>Use <code>Chat &gt; Copy Connection Invite</code> to copy your current IP and TCP port for someone else to paste into Direct Connect.</li>
+        <li>Use <code>Chat &gt; Reconnect Saved Contacts</code> to try remembered contacts and saved manual IPs again.</li>
+        <li>Use <code>Chat &gt; Scan Local Network</code> as an optional fallback when discovery is blocked. It checks nearby local addresses using Direct Connect.</li>
+        <li>Use <code>Chat &gt; Firewall Setup Helper</code> for Windows Firewall guidance.</li>
+        <li>If the preferred direct TCP range is busy, Blinq Messenger can listen on an OS-assigned fallback TCP port and announce that port to discovered peers.</li>
+        <li>If UDP discovery cannot bind or broadcast traffic is blocked, automatic contact discovery may be incomplete.</li>
+        <li>Use <code>Chat &gt; Direct Connect by IP</code> in LAN Mode when you know another computer's IPv4 address. If that user is on a fallback TCP port, enter the exact address as <code>IP:port</code>.</li>
+      </ul>
+      <div class="callout">Port details should come from Network Diagnostics because firewalls, other running apps, and startup order can change what the app is actually using.</div>
+    </section>
+
+    <section id="faq" class="faq">
+      <h2>FAQ</h2>
+      <details open>
+        <summary>Why do I not see another user?</summary>
+        <p>Make sure both computers are on the same private network, Windows Firewall allows Blinq Messenger on Private networks, and neither user is set to Invisible.</p>
+      </details>
+      <details>
+        <summary>Does Blinq Messenger use a server?</summary>
+        <p>LAN Mode does not require a central chat server for local discovery and peer-to-peer communication. Internet Mode uses the Blinq Internet service for account-based remote private chat.</p>
+      </details>
+      <details>
+        <summary>Can I chat with someone outside my LAN?</summary>
+        <p>Yes. Switch to Internet Mode, sign in with a Blinq ID, and add the other person as a contact. Direct Connect by IP is still a LAN Mode fallback for reachable local networks when broadcast discovery is blocked.</p>
+      </details>
+      <details>
+        <summary>What happens if a port is already in use?</summary>
+        <p>For direct TCP chat and file transfer, Blinq Messenger tries its preferred range and can fall back to another available TCP port. Peers discovered automatically receive the active port in your presence message. If discovery is blocked, Direct Connect may need the exact <code>IP:port</code> shown in Network Diagnostics.</p>
+      </details>
+      <details>
+        <summary>What if discovery works for one user but not another?</summary>
+        <p>The user whose discovery channel is unavailable may not see contacts automatically. Other users might still see them if outbound announcements are allowed, and direct chats can still work when the active TCP port is reachable.</p>
+      </details>
+      <details>
+        <summary>Why does Blinq remember contacts?</summary>
+        <p>Remembered contacts let Blinq try the last known IP and port again later. This helps when automatic discovery is blocked but the devices are still reachable on the same network.</p>
+      </details>
+      <details>
+        <summary>What does Do Not Disturb block?</summary>
+        <p>When your status is Do Not Disturb, Blinq Messenger refuses incoming private messages, files, drawings, whistles, typing indicators, and activities. If you start a private conversation while in Do Not Disturb, Blinq changes you back to Available first so the other person can reply. Public Chat remains visible.</p>
+      </details>
+      <details>
+        <summary>Why did a file ask for acceptance but an image did not?</summary>
+        <p>Displayable images are shown inline and sent directly. Other files ask for acceptance first so the receiver can decide whether to download them.</p>
+      </details>
+      <details>
+        <summary>Where are received files saved?</summary>
+        <p>Received files are saved in your Downloads folder under <code>Blinq Messenger Received</code>.</p>
+      </details>
+      <details>
+        <summary>What does Invisible do?</summary>
+        <p>In LAN Mode, Invisible stops announcing you on the LAN. Contacts that already know your address may still be able to message you directly. In Internet Mode, presence is sent through your account connection.</p>
+      </details>
+      <details>
+        <summary>Why does my status become Idle?</summary>
+        <p>If you are inactive for a while, Blinq Messenger can show you as Idle. Returning to the app updates activity again.</p>
+      </details>
+      <details>
+        <summary>Is my chat moderated or stored by Exe Innovate?</summary>
+        <p>Blinq Messenger does not moderate your conversations. LAN Mode chats are local/direct. Internet Mode depends on the Blinq Internet service for account-based delivery, and users remain responsible for what they send and receive.</p>
+      </details>
+    </section>
+
+    <section id="license">
+      <h2>License and Responsible Use</h2>
+      <h3>Blinq Messenger Freeware License</h3>
+      <p>Blinq Messenger is provided as freeware by Exe Innovate. You may use the application to communicate, share messages, send files, and use LAN or Internet chat features for personal or business work.</p>
+      <h3>Responsible use</h3>
+      <p>You are responsible for the messages, files, images, drawings, profile information, and other content you send or receive with the application. Do not use Blinq Messenger to harass, impersonate, distribute illegal content, invade privacy, violate workplace or school rules, or break any applicable law.</p>
+      <p>Exe Innovate is not responsible for how users choose to use the application, for content exchanged between users, or for consequences caused by misuse, unauthorized sharing, offensive messages, unsafe files, or communication with unintended recipients.</p>
+      <h3>Network, accounts, and privacy</h3>
+      <p>LAN Mode is designed for local-network communication and peer discovery. Users are responsible for choosing trusted networks, configuring firewall rules, and verifying who they communicate with.</p>
+      <p>Internet Mode uses a Blinq account and server connection to reach approved contacts outside the LAN. Users are responsible for protecting their account credentials, choosing contacts carefully, and following applicable rules for remote communication.</p>
+      <h3>Files and security</h3>
+      <p>Always be careful with files received from other users. Exe Innovate is not responsible for data loss, malware, unwanted files, disclosure of private information, or damage caused by files, images, links, or content exchanged through the app.</p>
+      <h3>Included components</h3>
+      <p>The application includes its own code and third-party components, including Qt libraries and interface resources. Those components remain subject to their respective licenses.</p>
+      <h3>No warranty</h3>
+      <p>The software is provided as-is, without warranty of any kind. Exe Innovate does not guarantee uninterrupted communication, message delivery, compatibility, security, or fitness for a particular purpose.</p>
+      <h3>Redistribution</h3>
+      <p>Redistribution is allowed only when the application remains unmodified and credited to Exe Innovate. Commercial resale, reverse branding, or claiming authorship is not permitted.</p>
+    </section>
+
+    <p class="footer">Made with ❤ by Exe Innovate</p>
+  </main>
+</body>
+</html>

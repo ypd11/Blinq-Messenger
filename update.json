@@ -1,0 +1,8 @@
+{
+  "version": "1.0.0",
+  "releaseDate": "2026-06-18",
+  "installerUrl": "https://github.com/ypd11/Blinq-Messenger/releases/download/v1.0.0/BlinqMessengerSetup-1.0.0.exe",
+  "changelog": [
+    "Initial public release."
+  ]
+}

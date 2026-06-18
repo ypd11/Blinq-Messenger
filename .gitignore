@@ -1,0 +1,42 @@
+# Build outputs
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.autogen/
+
+# Qt Creator local files
+.qtcreator/
+*.user
+*.user.*
+CMakeLists.txt.user*
+
+# Windows and compiler outputs
+*.exe
+*.dll
+*.obj
+*.o
+*.a
+*.lib
+*.pdb
+*.ilk
+*.res
+
+# Release packaging output
+deploy/windows/dist/
+deploy/windows/installer/
+
+# Local runtime/state
+*.log
+*.tmp
+*.bak
+*.blinqbackup
+
+# OS/editor noise
+Thumbs.db
+Desktop.ini
+.DS_Store
+.vscode/
+.idea/
