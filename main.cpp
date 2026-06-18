@@ -51,10 +51,12 @@ protected:
 int main(int argc, char *argv[])
 {
 #ifdef Q_OS_WIN
-    SetCurrentProcessExplicitAppUserModelID(L"ExeInnovate.BlinqMessenger");
+    SetCurrentProcessExplicitAppUserModelID(L"BlinqMessenger");
 #endif
 
     QApplication a(argc, argv);
+    QApplication::setOrganizationName(QStringLiteral("Exe Innovate"));
+    QApplication::setOrganizationDomain(QStringLiteral("exeinnovate.com"));
     QApplication::setApplicationName(QStringLiteral("Blinq Messenger"));
     QApplication::setApplicationDisplayName(QStringLiteral("Blinq Messenger"));
     QApplication::setApplicationVersion(QStringLiteral(BLINQ_APP_VERSION));

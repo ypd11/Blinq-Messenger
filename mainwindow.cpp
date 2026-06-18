@@ -1150,7 +1150,10 @@ void MainWindow::buildTrayIcon()
 {
     m_trayMenu = new QMenu(this);
     auto *showAction = m_trayMenu->addAction(QIcon(QStringLiteral(":/icons/assets/appicon.ico")), tr("Show Blinq Messenger"));
-    auto *connectionInfoAction = m_trayMenu->addAction(QIcon(QStringLiteral(":/icons/assets/connection_info.png")), tr("Network Diagnostics"));
+    QAction *connectionInfoAction = nullptr;
+    if (!isInternetMode()) {
+        connectionInfoAction = m_trayMenu->addAction(QIcon(QStringLiteral(":/icons/assets/connection_info.png")), tr("Network Diagnostics"));
+    }
     auto *settingsAction = m_trayMenu->addAction(QIcon(QStringLiteral(":/icons/assets/settings.png")), tr("Settings"));
     auto *statusMenu = m_trayMenu->addMenu(tr("Status"));
     const QStringList statuses = {tr("Available"), tr("Busy"), tr("Away"), tr("Do Not Disturb"), tr("Invisible")};
@@ -1186,7 +1189,9 @@ void MainWindow::buildTrayIcon()
     connect(showAction, &QAction::triggered, this, [this] {
         showFromTray();
     });
-    connect(connectionInfoAction, &QAction::triggered, this, &MainWindow::showConnectionInfo);
+    if (connectionInfoAction) {
+        connect(connectionInfoAction, &QAction::triggered, this, &MainWindow::showConnectionInfo);
+    }
     connect(settingsAction, &QAction::triggered, this, &MainWindow::showSettings);
     connect(quitAction, &QAction::triggered, this, [this] {
         m_reallyQuit = true;
@@ -1276,11 +1281,10 @@ void MainWindow::connectSignals()
             window->activateWindow();
             playReceivedSound();
         } else if (notify) {
-            QString notificationMessage = message;
+            const QString senderName = peerName.isEmpty() ? tr("Someone") : peerName;
+            QString notificationMessage = tr("%1: %2").arg(senderName, message);
             if (isHtml) {
-                QTextDocument document;
-                document.setHtml(message);
-                notificationMessage = document.toPlainText();
+                notificationMessage = tr("%1 sent a rich message").arg(senderName);
             }
             if (showIncomingNotification(m_peers.value(peerId), notificationMessage)) {
                 playNotificationSound();
@@ -1550,7 +1554,13 @@ void MainWindow::connectSignals()
             }
         }
         const ChatPeer peer = m_knownPeers.value(peerId, m_peers.value(peerId));
-        if (notify && showIncomingNotification(peer, message)) {
+        const QString senderName = peerName.isEmpty()
+                                       ? (peer.name.isEmpty() ? tr("Someone") : peer.name)
+                                       : peerName;
+        const QString notificationMessage = isHtml
+                                                ? tr("%1 sent a rich message").arg(senderName)
+                                                : tr("%1: %2").arg(senderName, message);
+        if (notify && showIncomingNotification(peer, notificationMessage)) {
             playNotificationSound();
         } else {
             playReceivedSound();
@@ -1690,11 +1700,10 @@ void MainWindow::connectSignals()
             window->activateWindow();
             playReceivedSound();
         } else if (notify) {
-            QString notificationMessage = message;
+            const QString senderLabel = peerName.isEmpty() ? tr("Someone") : peerName;
+            QString notificationMessage = tr("%1 in Public Chat: %2").arg(senderLabel, message);
             if (isHtml) {
-                QTextDocument document;
-                document.setHtml(message);
-                notificationMessage = document.toPlainText();
+                notificationMessage = tr("%1 sent a rich message in Public Chat").arg(senderLabel);
             }
             if (showPublicIncomingNotification(peerName, notificationMessage)) {
                 playNotificationSound();
@@ -2941,10 +2950,10 @@ QStringList MainWindow::localIpv4Addresses() const
 QString MainWindow::connectionInviteText() const
 {
     const QStringList addresses = localIpv4Addresses();
-    const QString endpoint = addresses.isEmpty()
-                                 ? QStringLiteral("IP:%1").arg(m_chatService->directTcpPort())
-                                 : QStringLiteral("%1:%2").arg(addresses.first()).arg(m_chatService->directTcpPort());
-    return tr("Blinq Messenger invite\nName: %1\nConnect: %2\n\nPaste the Connect value into Chat > Direct Connect by IP.")
+    const int tcpPort = m_chatService->directTcpPort();
+    const QString host = addresses.isEmpty() ? tr("this computer's IPv4 address") : addresses.first();
+    const QString endpoint = tcpPort > 0 ? QStringLiteral("%1:%2").arg(host).arg(tcpPort) : host;
+    return tr("Blinq Messenger invite\nName: %1\nDirect Connect address: %2")
         .arg(m_chatService->localName(), endpoint);
 }
 
@@ -3073,7 +3082,7 @@ void MainWindow::showConnectionInviteDialog()
     dialog.resize(460, 260);
 
     auto *layout = new QVBoxLayout(&dialog);
-    auto *label = new QLabel(tr("Send this invite to someone on the same reachable network. They can paste it into Direct Connect."), &dialog);
+    auto *label = new QLabel(tr("Send this invite to someone on the same LAN. They can copy the Direct Connect address, or paste the whole invite, into Chat > Direct Connect by IP."), &dialog);
     label->setWordWrap(true);
     auto *inviteText = new QTextEdit(&dialog);
     inviteText->setReadOnly(true);
@@ -3807,9 +3816,6 @@ void MainWindow::showAbout()
     debug << tr("- Current mode: %1").arg(isInternetMode() ? tr("Internet Mode") : tr("LAN Mode"));
     if (isInternetMode()) {
         debug << tr("- Blinq ID: %1").arg(m_settings.internetBlinqId.isEmpty() ? tr("not signed in") : m_settings.internetBlinqId);
-        debug << tr("- Internet server: %1:%2")
-                     .arg(m_settings.internetServerHost,
-                          QString::number(m_settings.internetServerPort));
         debug << tr("- Server state: %1").arg(m_internetRelay->isAuthenticated() ? tr("authenticated") : tr("not authenticated"));
     }
     debug << QString();
@@ -4164,7 +4170,7 @@ bool MainWindow::showIncomingNotification(const ChatPeer &peer, const QString &m
     m_pendingNotificationPeerId = peer.id;
     m_pendingNotificationAction = QStringLiteral("openChat");
     m_pendingNotificationIsPublic = false;
-    showNativeNotification(peer.name.isEmpty() ? tr("Blinq Messenger message") : peer.name,
+    showNativeNotification(tr("Blinq Messenger"),
                            message,
                            avatarIcon(peer.avatarData, peer.name));
     return true;
@@ -4179,7 +4185,7 @@ bool MainWindow::showPublicIncomingNotification(const QString &sender, const QSt
     m_pendingNotificationPeerId.clear();
     m_pendingNotificationAction = QStringLiteral("openPublic");
     m_pendingNotificationIsPublic = true;
-    showNativeNotification(tr("Public chat - %1").arg(sender),
+    showNativeNotification(tr("Blinq Messenger"),
                            message,
                            windowIcon());
     return true;

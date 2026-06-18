@@ -39,8 +39,8 @@ Name: "startup"; Description: "Start Blinq Messenger when Windows starts"; Group
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\Blinq Messenger"; Filename: "{app}\messenger.exe"; AppUserModelID: "ExeInnovate.BlinqMessenger"
-Name: "{autodesktop}\Blinq Messenger"; Filename: "{app}\messenger.exe"; Tasks: desktopicon; AppUserModelID: "ExeInnovate.BlinqMessenger"
+Name: "{autoprograms}\Blinq Messenger"; Filename: "{app}\messenger.exe"; AppUserModelID: "BlinqMessenger"
+Name: "{autodesktop}\Blinq Messenger"; Filename: "{app}\messenger.exe"; Tasks: desktopicon; AppUserModelID: "BlinqMessenger"
 
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Blinq Messenger"; ValueData: """{app}\messenger.exe"" --startup"; Tasks: startup

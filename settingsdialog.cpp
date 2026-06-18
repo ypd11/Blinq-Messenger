@@ -12,6 +12,7 @@
 
 SettingsDialog::SettingsDialog(const AppSettings &settings, QWidget *parent)
     : QDialog(parent)
+    , m_savedManualPeerAddresses(settings.manualPeerAddresses)
 {
     setWindowTitle(tr("Settings"));
     setModal(true);
@@ -111,56 +112,58 @@ SettingsDialog::SettingsDialog(const AppSettings &settings, QWidget *parent)
     updateBlockedEmpty();
     tabs->addTab(blockedPage, tr("Blocked Users"));
 
-    auto *manualPage = new QWidget(tabs);
-    auto *manualLayout = new QVBoxLayout(manualPage);
-    manualLayout->setContentsMargins(12, 12, 12, 12);
-    manualLayout->setSpacing(10);
-    m_manualPeersList = new QListWidget(manualPage);
-    m_manualPeersList->setObjectName(QStringLiteral("ManualPeersList"));
-    for (const QString &address : settings.manualPeerAddresses) {
-        auto *item = new QListWidgetItem(address, m_manualPeersList);
-        item->setData(Qt::UserRole, address);
-    }
-    m_manualEmptyLabel = new QLabel(tr("No manual IP addresses saved."), manualPage);
-    m_manualEmptyLabel->setObjectName(QStringLiteral("ManualEmptyLabel"));
-    m_manualEmptyLabel->setAlignment(Qt::AlignCenter);
-    m_manualEmptyLabel->setStyleSheet(QStringLiteral("color:#64748b; padding:18px;"));
-    auto *manualButtons = new QWidget(manualPage);
-    auto *manualButtonsLayout = new QHBoxLayout(manualButtons);
-    manualButtonsLayout->setContentsMargins(0, 8, 0, 0);
-    manualButtonsLayout->addStretch();
-    auto *connectManualButton = new QPushButton(tr("Connect"), manualButtons);
-    auto *addManualButton = new QPushButton(tr("Add IP"), manualButtons);
-    auto *removeManualButton = new QPushButton(tr("Remove Selected"), manualButtons);
-    manualButtonsLayout->addWidget(connectManualButton);
-    manualButtonsLayout->addWidget(addManualButton);
-    manualButtonsLayout->addWidget(removeManualButton);
-    const auto updateManualEmpty = [this] {
-        m_manualEmptyLabel->setVisible(m_manualPeersList->count() == 0);
-        m_manualPeersList->setVisible(m_manualPeersList->count() > 0);
-    };
-    connect(addManualButton, &QPushButton::clicked, this, [this] {
-        emit directConnectRequested();
-    });
-    connect(connectManualButton, &QPushButton::clicked, this, [this] {
-        if (!m_manualPeersList->currentItem()) {
-            return;
+    if (settings.appMode != QStringLiteral("internet")) {
+        auto *manualPage = new QWidget(tabs);
+        auto *manualLayout = new QVBoxLayout(manualPage);
+        manualLayout->setContentsMargins(12, 12, 12, 12);
+        manualLayout->setSpacing(10);
+        m_manualPeersList = new QListWidget(manualPage);
+        m_manualPeersList->setObjectName(QStringLiteral("ManualPeersList"));
+        for (const QString &address : settings.manualPeerAddresses) {
+            auto *item = new QListWidgetItem(address, m_manualPeersList);
+            item->setData(Qt::UserRole, address);
         }
-        QString address = m_manualPeersList->currentItem()->data(Qt::UserRole).toString();
-        if (address.isEmpty()) {
-            address = m_manualPeersList->currentItem()->text();
-        }
-        emit manualPeerConnectRequested(address);
-    });
-    connect(removeManualButton, &QPushButton::clicked, this, [this, updateManualEmpty] {
-        delete m_manualPeersList->takeItem(m_manualPeersList->currentRow());
+        m_manualEmptyLabel = new QLabel(tr("No manual IP addresses saved."), manualPage);
+        m_manualEmptyLabel->setObjectName(QStringLiteral("ManualEmptyLabel"));
+        m_manualEmptyLabel->setAlignment(Qt::AlignCenter);
+        m_manualEmptyLabel->setStyleSheet(QStringLiteral("color:#64748b; padding:18px;"));
+        auto *manualButtons = new QWidget(manualPage);
+        auto *manualButtonsLayout = new QHBoxLayout(manualButtons);
+        manualButtonsLayout->setContentsMargins(0, 8, 0, 0);
+        manualButtonsLayout->addStretch();
+        auto *connectManualButton = new QPushButton(tr("Connect"), manualButtons);
+        auto *addManualButton = new QPushButton(tr("Add IP"), manualButtons);
+        auto *removeManualButton = new QPushButton(tr("Remove Selected"), manualButtons);
+        manualButtonsLayout->addWidget(connectManualButton);
+        manualButtonsLayout->addWidget(addManualButton);
+        manualButtonsLayout->addWidget(removeManualButton);
+        const auto updateManualEmpty = [this] {
+            m_manualEmptyLabel->setVisible(m_manualPeersList->count() == 0);
+            m_manualPeersList->setVisible(m_manualPeersList->count() > 0);
+        };
+        connect(addManualButton, &QPushButton::clicked, this, [this] {
+            emit directConnectRequested();
+        });
+        connect(connectManualButton, &QPushButton::clicked, this, [this] {
+            if (!m_manualPeersList->currentItem()) {
+                return;
+            }
+            QString address = m_manualPeersList->currentItem()->data(Qt::UserRole).toString();
+            if (address.isEmpty()) {
+                address = m_manualPeersList->currentItem()->text();
+            }
+            emit manualPeerConnectRequested(address);
+        });
+        connect(removeManualButton, &QPushButton::clicked, this, [this, updateManualEmpty] {
+            delete m_manualPeersList->takeItem(m_manualPeersList->currentRow());
+            updateManualEmpty();
+        });
+        manualLayout->addWidget(m_manualPeersList, 1);
+        manualLayout->addWidget(m_manualEmptyLabel, 1);
+        manualLayout->addWidget(manualButtons);
         updateManualEmpty();
-    });
-    manualLayout->addWidget(m_manualPeersList, 1);
-    manualLayout->addWidget(m_manualEmptyLabel, 1);
-    manualLayout->addWidget(manualButtons);
-    updateManualEmpty();
-    tabs->addTab(manualPage, tr("Manual IPs"));
+        tabs->addTab(manualPage, tr("Manual IPs"));
+    }
 
     auto *resetPage = new QWidget(tabs);
     auto *resetLayout = new QVBoxLayout(resetPage);
@@ -274,10 +277,14 @@ AppSettings SettingsDialog::settings() const
         auto *item = m_blockedList->item(row);
         result.blockedPeers.insert(item->data(Qt::UserRole).toString(), item->text());
     }
-    for (int row = 0; row < m_manualPeersList->count(); ++row) {
-        QString addr = m_manualPeersList->item(row)->data(Qt::UserRole).toString();
-        if (addr.isEmpty()) addr = m_manualPeersList->item(row)->text();
-        result.manualPeerAddresses.append(addr);
+    result.manualPeerAddresses = m_savedManualPeerAddresses;
+    if (m_manualPeersList) {
+        result.manualPeerAddresses.clear();
+        for (int row = 0; row < m_manualPeersList->count(); ++row) {
+            QString addr = m_manualPeersList->item(row)->data(Qt::UserRole).toString();
+            if (addr.isEmpty()) addr = m_manualPeersList->item(row)->text();
+            result.manualPeerAddresses.append(addr);
+        }
     }
     result.manualPeerAddresses.removeDuplicates();
     return result;

@@ -69,6 +69,7 @@ private:
     QLabel *m_manualEmptyLabel = nullptr;
     QListWidget *m_blockedList = nullptr;
     QListWidget *m_manualPeersList = nullptr;
+    QStringList m_savedManualPeerAddresses;
 };
 
 #endif // SETTINGSDIALOG_H
