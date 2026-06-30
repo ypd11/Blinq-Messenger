@@ -2,6 +2,7 @@
 
 const crypto = require("crypto");
 const fs = require("fs");
+const https = require("https");
 const net = require("net");
 const path = require("path");
 const Database = require("better-sqlite3");
@@ -9,6 +10,7 @@ const Database = require("better-sqlite3");
 const PORT = Number(process.env.BLINQ_SERVER_PORT || 45476);
 const DATA_DIR = process.env.BLINQ_DATA_DIR || "/opt/blinq-server/data";
 const UPLOAD_DIR = process.env.BLINQ_UPLOAD_DIR || "/opt/blinq-server/uploads";
+const FIREBASE_SERVICE_ACCOUNT_PATH = process.env.BLINQ_FIREBASE_SERVICE_ACCOUNT || "/opt/blinq-server/firebase-service-account.json";
 const SQLITE_PATH = path.join(DATA_DIR, "blinq.sqlite3");
 const LEGACY_JSON_PATH = path.join(DATA_DIR, "db.json");
 const DOMAIN = "blinqm.net";
@@ -19,9 +21,31 @@ const UPLOAD_TTL_MS = Number(process.env.BLINQ_UPLOAD_TTL_MS || 60 * 60 * 1000);
 const QUEUED_MESSAGE_TTL_MS = Number(process.env.BLINQ_QUEUED_MESSAGE_TTL_MS || 7 * 24 * 60 * 60 * 1000);
 const MAX_QUEUED_MESSAGES_PER_USER = Number(process.env.BLINQ_MAX_QUEUED_MESSAGES_PER_USER || 200);
 const MAX_QUEUED_TEXT_BYTES_PER_USER = Number(process.env.BLINQ_MAX_QUEUED_TEXT_BYTES_PER_USER || 1024 * 1024);
+const PASSWORD_RESET_CODE_TTL_MS = Number(process.env.BLINQ_PASSWORD_RESET_CODE_TTL_MS || 5 * 60 * 1000);
+const RESEND_API_KEY = process.env.BLINQ_RESEND_API_KEY || process.env.RESEND_API_KEY || "";
+const RESEND_FROM = process.env.BLINQ_RESEND_FROM || "Blinq Messenger <no-reply@mail.blinqm.net>";
+const FEEDBACK_TO = process.env.BLINQ_FEEDBACK_TO || "exeinn.info@gmail.com";
+const VERBOSE_LOGS = process.env.BLINQ_VERBOSE_LOGS === "1";
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+
+let firebaseMessaging = null;
+try {
+  if (fs.existsSync(FIREBASE_SERVICE_ACCOUNT_PATH)) {
+    const admin = require("firebase-admin");
+    const serviceAccount = JSON.parse(fs.readFileSync(FIREBASE_SERVICE_ACCOUNT_PATH, "utf8"));
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount)
+    });
+    firebaseMessaging = admin.messaging();
+    console.log("Firebase Cloud Messaging enabled.");
+  } else {
+    console.log(`Firebase service account not found at ${FIREBASE_SERVICE_ACCOUNT_PATH}; push notifications disabled.`);
+  }
+} catch (error) {
+  console.log("Firebase Cloud Messaging disabled:", error.message);
+}
 
 function now() {
   return new Date().toISOString();
@@ -46,6 +70,7 @@ db.exec(`
     avatar TEXT NOT NULL DEFAULT '',
     theme_color TEXT NOT NULL DEFAULT '',
     searchable INTEGER NOT NULL DEFAULT 1,
+    email TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
     last_seen_at TEXT NOT NULL
   );
@@ -89,22 +114,46 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_queued_messages_to_created ON queued_messages(to_user_id, created_at);
   CREATE INDEX IF NOT EXISTS idx_queued_messages_from ON queued_messages(from_user_id);
+  CREATE TABLE IF NOT EXISTS push_tokens (
+    token TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    platform TEXT NOT NULL DEFAULT 'android',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_push_tokens_user_id ON push_tokens(user_id);
+  CREATE TABLE IF NOT EXISTS password_reset_codes (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    code_salt TEXT NOT NULL,
+    code_hash TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    used_at TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_password_reset_codes_user ON password_reset_codes(user_id, created_at);
 `);
 
 const userColumns = db.prepare("PRAGMA table_info(users)").all().map((column) => column.name);
 if (!userColumns.includes("searchable")) {
   db.exec("ALTER TABLE users ADD COLUMN searchable INTEGER NOT NULL DEFAULT 1");
 }
+if (!userColumns.includes("email")) {
+  db.exec("ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''");
+}
+db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email <> ''");
 
 const statements = {
   getMeta: db.prepare("SELECT value FROM meta WHERE key = ?"),
   setMeta: db.prepare("INSERT INTO meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"),
   userByUsername: db.prepare("SELECT * FROM users WHERE username = ?"),
+  userByEmail: db.prepare("SELECT * FROM users WHERE email = ?"),
   userById: db.prepare("SELECT * FROM users WHERE id = ?"),
   userCount: db.prepare("SELECT COUNT(*) AS count FROM users"),
   insertUser: db.prepare(`
-    INSERT INTO users(id, username, display_name, password_salt, password_hash, status, personal_message, avatar, theme_color, searchable, created_at, last_seen_at)
-    VALUES(@id, @username, @displayName, @passwordSalt, @passwordHash, @status, @personalMessage, @avatar, @themeColor, @searchable, @createdAt, @lastSeenAt)
+    INSERT INTO users(id, username, display_name, password_salt, password_hash, status, personal_message, avatar, theme_color, searchable, email, created_at, last_seen_at)
+    VALUES(@id, @username, @displayName, @passwordSalt, @passwordHash, @status, @personalMessage, @avatar, @themeColor, @searchable, @email, @createdAt, @lastSeenAt)
   `),
   updateUserPresence: db.prepare(`
     UPDATE users
@@ -118,11 +167,13 @@ const statements = {
     WHERE id = @id
   `),
   updateUserPassword: db.prepare("UPDATE users SET password_salt = ?, password_hash = ? WHERE id = ?"),
+  updateUserEmail: db.prepare("UPDATE users SET email = ? WHERE id = ?"),
   updateUserOnline: db.prepare("UPDATE users SET status = ?, last_seen_at = ? WHERE id = ?"),
   updateAllUsersOffline: db.prepare("UPDATE users SET status = 'Offline', last_seen_at = ? WHERE status <> 'Offline'"),
   deleteUser: db.prepare("DELETE FROM users WHERE id = ?"),
   insertSession: db.prepare("INSERT INTO sessions(token, user_id, created_at) VALUES(?, ?, ?)"),
   sessionByToken: db.prepare("SELECT * FROM sessions WHERE token = ?"),
+  deleteSession: db.prepare("DELETE FROM sessions WHERE token = ?"),
   deleteSessionsForUser: db.prepare("DELETE FROM sessions WHERE user_id = ?"),
   contactPair: db.prepare("SELECT 1 FROM contacts WHERE (a = ? AND b = ?) OR (a = ? AND b = ?) LIMIT 1"),
   contactIds: db.prepare(`
@@ -131,6 +182,7 @@ const statements = {
     WHERE a = ? OR b = ?
   `),
   insertContact: db.prepare("INSERT OR IGNORE INTO contacts(a, b, created_at) VALUES(?, ?, ?)"),
+  deleteContactPair: db.prepare("DELETE FROM contacts WHERE (a = ? AND b = ?) OR (a = ? AND b = ?)"),
   deleteContactsForUser: db.prepare("DELETE FROM contacts WHERE a = ? OR b = ?"),
   pendingRequestsForUser: db.prepare("SELECT * FROM contact_requests WHERE to_user_id = ? AND status = 'pending'"),
   pendingRequestFromTo: db.prepare("SELECT * FROM contact_requests WHERE from_user_id = ? AND to_user_id = ? AND status = 'pending'"),
@@ -147,6 +199,32 @@ const statements = {
   deleteQueuedMessage: db.prepare("DELETE FROM queued_messages WHERE id = ?"),
   deleteExpiredQueuedMessages: db.prepare("DELETE FROM queued_messages WHERE created_at < ?"),
   deleteQueuedMessagesForUser: db.prepare("DELETE FROM queued_messages WHERE from_user_id = ? OR to_user_id = ?"),
+  upsertPushToken: db.prepare(`
+    INSERT INTO push_tokens(token, user_id, platform, created_at, updated_at)
+    VALUES(@token, @userId, @platform, @createdAt, @updatedAt)
+    ON CONFLICT(token) DO UPDATE SET
+      user_id = excluded.user_id,
+      platform = excluded.platform,
+      updated_at = excluded.updated_at
+  `),
+  pushTokensForUser: db.prepare("SELECT token FROM push_tokens WHERE user_id = ? AND platform = 'android'"),
+  deletePushToken: db.prepare("DELETE FROM push_tokens WHERE token = ?"),
+  deletePushTokensForUser: db.prepare("DELETE FROM push_tokens WHERE user_id = ?"),
+  insertPasswordResetCode: db.prepare(`
+    INSERT INTO password_reset_codes(id, user_id, code_salt, code_hash, expires_at, attempts, used_at, created_at)
+    VALUES(@id, @userId, @codeSalt, @codeHash, @expiresAt, 0, NULL, @createdAt)
+  `),
+  latestPasswordResetCode: db.prepare(`
+    SELECT *
+    FROM password_reset_codes
+    WHERE user_id = ? AND used_at IS NULL
+    ORDER BY created_at DESC
+    LIMIT 1
+  `),
+  incrementPasswordResetAttempts: db.prepare("UPDATE password_reset_codes SET attempts = attempts + 1 WHERE id = ?"),
+  markPasswordResetUsed: db.prepare("UPDATE password_reset_codes SET used_at = ? WHERE id = ?"),
+  deletePasswordResetCodesForUser: db.prepare("DELETE FROM password_reset_codes WHERE user_id = ?"),
+  deleteExpiredPasswordResetCodes: db.prepare("DELETE FROM password_reset_codes WHERE expires_at < ? OR used_at IS NOT NULL"),
   searchUsers: db.prepare(`
     SELECT *
     FROM users
@@ -171,6 +249,7 @@ function rowToUser(row) {
     avatar: row.avatar,
     themeColor: row.theme_color,
     searchable: row.searchable !== 0,
+    email: row.email || "",
     createdAt: row.created_at,
     lastSeenAt: row.last_seen_at
   };
@@ -243,6 +322,7 @@ function migrateLegacyJsonIfNeeded() {
         avatar: String(user.avatar || ""),
         themeColor: String(user.themeColor || ""),
         searchable: user.searchable === false ? 0 : 1,
+        email: String(user.email || "").trim().toLowerCase(),
         createdAt: String(user.createdAt || now()),
         lastSeenAt: String(user.lastSeenAt || now())
       });
@@ -312,6 +392,14 @@ function normalizeUsername(value) {
   return text;
 }
 
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase().slice(0, 254);
+}
+
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) && value.length <= 254;
+}
+
 function normalizeSearchQuery(value) {
   return String(value || "").trim().replace(/\s+/g, " ").slice(0, 60);
 }
@@ -356,7 +444,8 @@ function publicUser(user) {
     personalMessage: user.personalMessage || "",
     avatar: user.avatar || "",
     themeColor: user.themeColor || "",
-    searchable: user.searchable !== false
+    searchable: user.searchable !== false,
+    lastSeenAt: user.lastSeenAt || ""
   };
 }
 
@@ -368,6 +457,17 @@ function sendError(socket, code, message) {
   send(socket, { type: "error", code, message });
 }
 
+function verboseLog(...args) {
+  if (VERBOSE_LOGS) {
+    console.log(...args);
+  }
+}
+
+function isRoutineSocketError(error) {
+  const code = String(error && error.code || "");
+  return code === "ECONNRESET" || code === "ETIMEDOUT" || code === "EPIPE";
+}
+
 function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
   const hash = crypto.pbkdf2Sync(String(password), salt, 120000, 32, "sha256").toString("hex");
   return { salt, hash };
@@ -376,6 +476,123 @@ function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
 function verifyPassword(password, user) {
   const result = hashPassword(password, user.passwordSalt);
   return crypto.timingSafeEqual(Buffer.from(result.hash, "hex"), Buffer.from(user.passwordHash, "hex"));
+}
+
+function sendEmailWithResend(to, subject, text, html) {
+  if (!RESEND_API_KEY) {
+    console.log("Email not sent: BLINQ_RESEND_API_KEY is not configured.");
+    return Promise.resolve(false);
+  }
+
+  const payload = JSON.stringify({
+    from: RESEND_FROM,
+    to: [to],
+    subject,
+    text,
+    html
+  });
+
+  return new Promise((resolve) => {
+    const request = https.request({
+      hostname: "api.resend.com",
+      path: "/emails",
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(payload)
+      },
+      timeout: 10000
+    }, (response) => {
+      let body = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk) => {
+        body += chunk;
+      });
+      response.on("end", () => {
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          resolve(true);
+        } else {
+          console.log(`Resend email failed (${response.statusCode}): ${body.slice(0, 300)}`);
+          resolve(false);
+        }
+      });
+    });
+    request.on("timeout", () => {
+      request.destroy(new Error("Resend request timed out"));
+    });
+    request.on("error", (error) => {
+      console.log("Resend email error:", error.message);
+      resolve(false);
+    });
+    request.write(payload);
+    request.end();
+  });
+}
+
+function sendPasswordResetEmail(user, code) {
+  if (!user || !user.email) return;
+  const subject = "Your Blinq Messenger password reset code";
+  const text = [
+    "Your Blinq Messenger password reset code is:",
+    "",
+    code,
+    "",
+    "This code expires in 5 minutes. If you did not request it, you can ignore this email."
+  ].join("\n");
+  const html = `<p>Your Blinq Messenger password reset code is:</p><p style="font-size:24px;font-weight:700;letter-spacing:4px">${code}</p><p>This code expires in 5 minutes. If you did not request it, you can ignore this email.</p>`;
+  sendEmailWithResend(user.email, subject, text, html).then((sent) => {
+    if (sent) console.log(`Password reset email sent for ${user.username}.`);
+  });
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function sendFeedbackEmail(user, feedback) {
+  const category = String(feedback.category || "Other").trim().slice(0, 40) || "Other";
+  const message = String(feedback.message || "").trim().slice(0, 4000);
+  const contactEmail = normalizeEmail(feedback.contactEmail);
+  const platform = String(feedback.platform || "Unknown").trim().slice(0, 60) || "Unknown";
+  const appVersion = String(feedback.appVersion || "").trim().slice(0, 40) || "unknown";
+  const debugInfo = String(feedback.debugInfo || "").trim().slice(0, 6000);
+  const subject = `[Blinq Feedback] ${category} from ${user.username}`;
+  const text = [
+    `Type: ${category}`,
+    `From: ${user.displayName} <${blinqId(user.username)}>`,
+    `Account ID: ${user.id}`,
+    `Contact email: ${contactEmail || "not provided"}`,
+    `Platform: ${platform}`,
+    `App version: ${appVersion}`,
+    `Received: ${now()}`,
+    "",
+    "Message:",
+    message,
+    "",
+    "Debug info:",
+    debugInfo || "not included"
+  ].join("\n");
+  const html = [
+    `<h2>Blinq Messenger Feedback</h2>`,
+    `<p><b>Type:</b> ${escapeHtml(category)}</p>`,
+    `<p><b>From:</b> ${escapeHtml(user.displayName)} &lt;${escapeHtml(blinqId(user.username))}&gt;</p>`,
+    `<p><b>Account ID:</b> ${escapeHtml(user.id)}</p>`,
+    `<p><b>Contact email:</b> ${escapeHtml(contactEmail || "not provided")}</p>`,
+    `<p><b>Platform:</b> ${escapeHtml(platform)}</p>`,
+    `<p><b>App version:</b> ${escapeHtml(appVersion)}</p>`,
+    `<p><b>Received:</b> ${escapeHtml(now())}</p>`,
+    `<h3>Message</h3>`,
+    `<pre style="white-space:pre-wrap;font-family:system-ui,Segoe UI,sans-serif">${escapeHtml(message)}</pre>`,
+    `<h3>Debug info</h3>`,
+    `<pre style="white-space:pre-wrap;font-family:Consolas,monospace">${escapeHtml(debugInfo || "not included")}</pre>`
+  ].join("");
+  return sendEmailWithResend(FEEDBACK_TO, subject, text, html);
 }
 
 function newId(prefix) {
@@ -391,6 +608,19 @@ function nextUserId() {
 
 function findUserByUsername(username) {
   return rowToUser(statements.userByUsername.get(username));
+}
+
+function findUserByEmail(email) {
+  return rowToUser(statements.userByEmail.get(email));
+}
+
+function findUserByIdentifier(identifier) {
+  const value = String(identifier || "").trim().toLowerCase();
+  if (!value) return null;
+  if (value.includes("@") && !value.endsWith(`@${DOMAIN}`)) {
+    return findUserByEmail(normalizeEmail(value));
+  }
+  return findUserByUsername(normalizeUsername(value));
 }
 
 function findUserById(id) {
@@ -445,6 +675,7 @@ function authenticateSocket(socket, user, token) {
     clientsByUserId.delete(socket.userId);
   }
   socket.userId = user.id;
+  socket.sessionToken = token;
   const status = user.status === "Invisible" ? "Invisible" : "Available";
   statements.updateUserOnline.run(status, now(), user.id);
   const updatedUser = findUserById(user.id);
@@ -536,6 +767,65 @@ function sendReceiptToSender(message, toUser, status) {
   });
 }
 
+function pushBodyForMessage(message, fromUser) {
+  if (message.kind === "imageMessage") return "sent you an image";
+  if (message.kind === "buzz") return "whistled at you";
+  if (message.isHtml) return "sent you a rich message";
+  return "sent you a message";
+}
+
+function sendPushToUser(toUserId, fromUser, message) {
+  if (!firebaseMessaging || !toUserId || !fromUser || !message) return;
+  const tokens = statements.pushTokensForUser.all(toUserId).map((row) => row.token).filter(Boolean);
+  if (!tokens.length) return;
+  const title = String(fromUser.displayName || blinqId(fromUser.username));
+  const body = pushBodyForMessage(message, fromUser);
+
+  const payload = {
+    tokens,
+    notification: {
+      title,
+      body
+    },
+    data: {
+      type: String(message.kind || "message"),
+      peerId: String(fromUser.id),
+      senderName: title,
+      messageId: String(message.id || ""),
+      title,
+      body
+    },
+    android: {
+      priority: "high",
+      notification: {
+        channelId: "blinq_messages",
+        clickAction: "com.ei.blinqmessenger.OPEN_BLINQ_CHAT",
+        title,
+        body
+      }
+    }
+  };
+
+  firebaseMessaging.sendEachForMulticast(payload)
+    .then((result) => {
+      const successCount = result.responses.filter((response) => response.success).length;
+      if (successCount > 0) {
+        verboseLog(`Push notification sent to ${successCount}/${tokens.length} device(s) for user ${toUserId}.`);
+      }
+      result.responses.forEach((response, index) => {
+        if (response.success) return;
+        const code = response.error && response.error.code;
+        if (code === "messaging/registration-token-not-registered" || code === "messaging/invalid-registration-token") {
+          statements.deletePushToken.run(tokens[index]);
+        }
+        console.log("Push notification failed:", code || (response.error && response.error.message) || "unknown error");
+      });
+    })
+    .catch((error) => {
+      console.log("Push notification error:", error.message);
+    });
+}
+
 function deliverMessage(message) {
   const from = findUserById(message.from);
   const to = findUserById(message.to);
@@ -550,6 +840,7 @@ function deliverMessage(message) {
   const queued = storeQueuedMessage(message);
   if (queued.ok) {
     sendReceiptToSender(message, to, "Queued");
+    sendPushToUser(message.to, from, message);
     return "queued";
   }
   const fromSocket = onlineSocketFor(message.from);
@@ -593,8 +884,11 @@ function handleMessage(socket, msg) {
     const username = normalizeUsername(msg.username);
     const password = String(msg.password || "");
     const displayName = String(msg.displayName || username).trim().slice(0, 60);
+    const email = normalizeEmail(msg.email);
     if (!/^[a-z0-9._]{3,32}$/.test(username)) return sendError(socket, "bad_username", "Use 3-32 lowercase letters, numbers, dots, or underscores.");
     if (password.length < 8) return sendError(socket, "bad_password", "Password must be at least 8 characters.");
+    if (email && !isValidEmail(email)) return sendError(socket, "bad_email", "Enter a valid recovery email address.");
+    if (email && findUserByEmail(email)) return sendError(socket, "email_taken", "That recovery email is already used by another account.");
     if (findUserByUsername(username)) return sendError(socket, "username_taken", "That Blinq ID is already taken.");
     const passwordData = hashPassword(password);
     const user = {
@@ -608,12 +902,79 @@ function handleMessage(socket, msg) {
       avatar: "",
       themeColor: "",
       searchable: 1,
+      email,
       createdAt: now(),
       lastSeenAt: now()
     };
     statements.insertUser.run(user);
     const token = createToken(user.id);
     return authenticateSocket(socket, findUserById(user.id), token);
+  }
+
+  if (type === "requestPasswordReset") {
+    const remoteAddress = remoteAddressFor(socket);
+    if (isRateLimited(`reset-ip:${remoteAddress}`, 5, 60 * 60 * 1000)) {
+      return send(socket, { type: "passwordResetRequested" });
+    }
+    const identifier = String(msg.identifier || msg.username || msg.email || "").trim();
+    if (identifier.length < 3 || identifier.length > 254) {
+      return send(socket, { type: "passwordResetRequested" });
+    }
+    if (isRateLimited(`reset-id:${identifier.toLowerCase()}`, 3, 15 * 60 * 1000)) {
+      return send(socket, { type: "passwordResetRequested" });
+    }
+
+    const user = findUserByIdentifier(identifier);
+    if (user && user.email && isValidEmail(user.email)) {
+      statements.deleteExpiredPasswordResetCodes.run(now());
+      const code = String(crypto.randomInt(0, 1000000)).padStart(6, "0");
+      const codeData = hashPassword(code);
+      statements.insertPasswordResetCode.run({
+        id: newId("pr"),
+        userId: user.id,
+        codeSalt: codeData.salt,
+        codeHash: codeData.hash,
+        expiresAt: new Date(Date.now() + PASSWORD_RESET_CODE_TTL_MS).toISOString(),
+        createdAt: now()
+      });
+      sendPasswordResetEmail(user, code);
+    }
+    return send(socket, { type: "passwordResetRequested" });
+  }
+
+  if (type === "resetPassword") {
+    const remoteAddress = remoteAddressFor(socket);
+    if (isRateLimited(`reset-finish-ip:${remoteAddress}`, 15, 60 * 60 * 1000)) {
+      return sendError(socket, "rate_limited", "Too many reset attempts. Please wait before trying again.");
+    }
+    const identifier = String(msg.identifier || msg.username || msg.email || "").trim();
+    const code = String(msg.code || "").trim().replace(/\s+/g, "");
+    const newPassword = String(msg.newPassword || "");
+    if (!/^\d{6}$/.test(code)) return sendError(socket, "bad_reset_code", "Enter the 6-digit reset code.");
+    if (newPassword.length < 8) return sendError(socket, "bad_new_password", "New password must be at least 8 characters.");
+    const user = findUserByIdentifier(identifier);
+    const reset = user && statements.latestPasswordResetCode.get(user.id);
+    if (!user || !reset || reset.used_at || new Date(reset.expires_at).getTime() < Date.now()) {
+      return sendError(socket, "bad_reset_code", "Reset code is invalid or expired.");
+    }
+    if (Number(reset.attempts || 0) >= 5) {
+      statements.markPasswordResetUsed.run(now(), reset.id);
+      return sendError(socket, "bad_reset_code", "Reset code is invalid or expired.");
+    }
+    const codeResult = hashPassword(code, reset.code_salt);
+    const matches = crypto.timingSafeEqual(Buffer.from(codeResult.hash, "hex"), Buffer.from(reset.code_hash, "hex"));
+    if (!matches) {
+      statements.incrementPasswordResetAttempts.run(reset.id);
+      return sendError(socket, "bad_reset_code", "Reset code is invalid or expired.");
+    }
+    const passwordData = hashPassword(newPassword);
+    db.transaction(() => {
+      statements.updateUserPassword.run(passwordData.salt, passwordData.hash, user.id);
+      statements.deleteSessionsForUser.run(user.id);
+      statements.markPasswordResetUsed.run(now(), reset.id);
+      statements.deletePasswordResetCodesForUser.run(user.id);
+    })();
+    return send(socket, { type: "passwordReset" });
   }
 
   if (type === "login") {
@@ -674,6 +1035,55 @@ function handleMessage(socket, msg) {
     return broadcastEffectivePresence(savedUser);
   }
 
+  if (type === "registerPushToken") {
+    const token = String(msg.token || "").trim();
+    const platform = String(msg.platform || "android").trim().toLowerCase().slice(0, 20) || "android";
+    if (platform !== "android") return sendError(socket, "bad_platform", "Unsupported push platform.");
+    if (token.length < 20 || token.length > 4096) return sendError(socket, "bad_push_token", "Invalid push token.");
+    const timestamp = now();
+    statements.upsertPushToken.run({
+      token,
+      userId: user.id,
+      platform,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    });
+    verboseLog(`Registered ${platform} push token for user ${user.username}.`);
+    return send(socket, { type: "pushTokenRegistered" });
+  }
+
+  if (type === "sendFeedback") {
+    if (isRateLimited(`feedback:${user.id}`, 3, 60 * 60 * 1000)) {
+      return sendError(socket, "rate_limited", "Please wait before sending more feedback.");
+    }
+    if (isRateLimited(`feedback-ip:${remoteAddressFor(socket)}`, 12, 60 * 60 * 1000)) {
+      return sendError(socket, "rate_limited", "Please wait before sending more feedback.");
+    }
+    const category = String(msg.category || "Other").trim().slice(0, 40) || "Other";
+    const message = String(msg.message || "").trim();
+    const contactEmail = normalizeEmail(msg.contactEmail);
+    if (message.length < 10) return sendError(socket, "bad_feedback", "Please enter a little more detail.");
+    if (message.length > 4000) return sendError(socket, "bad_feedback", "Feedback must be 4000 characters or less.");
+    if (contactEmail && !isValidEmail(contactEmail)) return sendError(socket, "bad_email", "Enter a valid contact email address.");
+
+    sendFeedbackEmail(user, {
+      category,
+      message,
+      contactEmail,
+      platform: msg.platform,
+      appVersion: msg.appVersion,
+      debugInfo: msg.debugInfo
+    }).then((sent) => {
+      if (sent) {
+        console.log(`Feedback email sent for ${user.username}.`);
+        send(socket, { type: "feedbackSent" });
+      } else {
+        sendError(socket, "feedback_failed", "Feedback could not be sent right now. Please try again later.");
+      }
+    });
+    return;
+  }
+
   if (type === "findUser") {
     const target = findUserByUsername(normalizeUsername(msg.blinqId || msg.username || msg.to));
     return send(socket, { type: "findUserResult", user: target ? publicUser(target) : null });
@@ -701,7 +1111,7 @@ function handleMessage(socket, msg) {
       .filter((candidate) => candidate && !areContacts(user.id, candidate.id))
       .slice(0, 10)
       .map(publicUser);
-    console.log(`searchUsers user=${user.username} query="${query}" results=${users.length}`);
+    verboseLog(`searchUsers user=${user.username} query="${query}" results=${users.length}`);
     return send(socket, { type: "userSearchResults", query, users });
   }
 
@@ -739,6 +1149,19 @@ function handleMessage(socket, msg) {
     if (!request) return sendError(socket, "request_not_found", "Contact request was not found.");
     statements.updateRequest.run("rejected", now(), request.id);
     return sendContacts(socket, user);
+  }
+
+  if (type === "removeContact") {
+    const target = findUserByUsername(normalizeUsername(msg.blinqId || msg.username || msg.to));
+    if (!target || !areContacts(user.id, target.id)) {
+      return sendError(socket, "not_contacts", "That user is not in your contacts.");
+    }
+
+    statements.deleteContactPair.run(user.id, target.id, target.id, user.id);
+    sendContacts(socket, user);
+    const targetSocket = onlineSocketFor(target.id);
+    if (targetSocket) sendContacts(targetSocket, target);
+    return send(socket, { type: "contactRemoved", user: publicUser(target) });
   }
 
   if (type === "message") {
@@ -815,6 +1238,28 @@ function handleMessage(socket, msg) {
     return authenticateSocket(socket, findUserById(user.id), token);
   }
 
+  if (type === "setRecoveryEmail") {
+    const password = String(msg.password || "");
+    const email = normalizeEmail(msg.email);
+    if (!verifyPassword(password, user)) return sendError(socket, "bad_password", "Current password is incorrect.");
+    if (!isValidEmail(email)) return sendError(socket, "bad_email", "Enter a valid recovery email address.");
+    const existing = findUserByEmail(email);
+    if (existing && existing.id !== user.id) return sendError(socket, "email_taken", "That recovery email is already used by another account.");
+    statements.updateUserEmail.run(email, user.id);
+    return send(socket, { type: "recoveryEmailSet" });
+  }
+
+  if (type === "logout") {
+    if (socket.sessionToken) {
+      statements.deleteSession.run(socket.sessionToken);
+    }
+    send(socket, { type: "signedOut" });
+    clientsByUserId.delete(user.id);
+    socket.userId = "";
+    socket.sessionToken = "";
+    return socket.end();
+  }
+
   if (type === "deleteAccount") {
     if (!verifyPassword(String(msg.password || ""), user)) {
       return sendError(socket, "bad_password", "Password is incorrect.");
@@ -826,6 +1271,7 @@ function handleMessage(socket, msg) {
       statements.deleteContactsForUser.run(userId, userId);
       statements.deleteRequestsForUser.run(userId, userId);
       statements.deleteQueuedMessagesForUser.run(userId, userId);
+      statements.deletePushTokensForUser.run(userId);
       statements.deleteUser.run(userId);
     })();
     send(socket, { type: "accountDeleted" });
@@ -878,7 +1324,9 @@ function handleConnection(socket) {
   });
 
   socket.on("error", (error) => {
-    console.log("socket error:", error.message);
+    if (!isRoutineSocketError(error)) {
+      console.log("socket error:", error.message);
+    }
   });
 }
 

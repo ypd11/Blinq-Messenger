@@ -13,6 +13,7 @@
 #include <QAbstractSocket>
 #include <QBuffer>
 #include <QClipboard>
+#include <QCheckBox>
 #include <QCloseEvent>
 #include <QColorDialog>
 #include <QComboBox>
@@ -55,6 +56,7 @@
 #include <QPushButton>
 #include <QFileInfo>
 #include <QRegularExpression>
+#include <QScreen>
 #include <QSoundEffect>
 #include <QSettings>
 #include <QSaveFile>
@@ -72,18 +74,25 @@
 #include <QTextEdit>
 #include <QTimer>
 #include <QToolButton>
+#include <QTcpSocket>
 #include <QVBoxLayout>
 #include <QUrl>
 #include <QUuid>
 #include <QVersionNumber>
 
+#ifdef Q_OS_WIN
+#include <qt_windows.h>
+#endif
+
 #include <algorithm>
 
 namespace {
 constexpr int ChatIdleTimeoutMs = 300000;
+constexpr int PublicChatUnattendedDelayMs = 20000;
+constexpr int PublicChatNotificationCooldownMs = 90000;
 constexpr int ContactItemTypeRole = Qt::UserRole;
 constexpr int ContactItemIdRole = Qt::UserRole + 1;
-const QByteArray OfflineQueueKey = QByteArrayLiteral("LANChat-v1-offline-queue-key");
+const QByteArray OfflineQueueKey = QByteArrayLiteral("BlinqMessenger-v1-offline-queue-key");
 const QString UpdateMetadataUrl = QStringLiteral("https://raw.githubusercontent.com/ypd11/Blinq-Messenger/main/update.json");
 
 QString compactCount(int value)
@@ -328,6 +337,23 @@ QIcon themeSwatchIcon(const AppTheme &theme)
     return QIcon(pixmap);
 }
 
+QIcon menuCheckIcon(const QString &accent)
+{
+    QPixmap pixmap(18, 18);
+    pixmap.fill(Qt::transparent);
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing);
+    const QColor color(accent.isEmpty() ? QStringLiteral("#1d9bf0") : accent);
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(color.lighter(185));
+    painter.drawRoundedRect(QRectF(2, 2, 14, 14), 4, 4);
+    QPen pen(color.darker(130), 2.2, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+    painter.setPen(pen);
+    painter.drawLine(QPointF(5, 9), QPointF(8, 12));
+    painter.drawLine(QPointF(8, 12), QPointF(13, 6));
+    return QIcon(pixmap);
+}
+
 QByteArray cryptLocalSettingsBytes(const QByteArray &data)
 {
     QByteArray result;
@@ -387,7 +413,7 @@ QString appDataPath()
 
 QJsonObject settingsToJson()
 {
-    QSettings settings(QStringLiteral("LANChat"), QStringLiteral("LANChat"));
+    QSettings settings(QStringLiteral("Exe Innovate"), QStringLiteral("Blinq Messenger"));
     QJsonObject values;
     for (const QString &key : settings.allKeys()) {
         values.insert(key, QJsonValue::fromVariant(settings.value(key)));
@@ -397,7 +423,7 @@ QJsonObject settingsToJson()
 
 void restoreSettingsFromJson(const QJsonObject &values)
 {
-    QSettings settings(QStringLiteral("LANChat"), QStringLiteral("LANChat"));
+    QSettings settings(QStringLiteral("Exe Innovate"), QStringLiteral("Blinq Messenger"));
     settings.clear();
     for (auto it = values.constBegin(); it != values.constEnd(); ++it) {
         settings.setValue(it.key(), it.value().toVariant());
@@ -483,11 +509,10 @@ QString statusColor(const QString &status)
 
 QString lastSeenText(const ChatPeer &peer)
 {
+    if (peer.status != QObject::tr("Offline") && peer.status != QObject::tr("Invisible")) {
+        return QObject::tr("Last seen now");
+    }
     if (peer.lastSeen.isValid()) {
-        const qint64 seconds = peer.lastSeen.secsTo(QDateTime::currentDateTimeUtc());
-        if (peer.status != QObject::tr("Offline") && peer.status != QObject::tr("Idle") && seconds < 20) {
-            return QObject::tr("Last seen now");
-        }
         return QObject::tr("Last seen %1").arg(peer.lastSeen.toLocalTime().toString(QStringLiteral("MMM d, h:mm AP")));
     }
     return QObject::tr("Last seen unknown");
@@ -680,7 +705,7 @@ MainWindow::MainWindow(QWidget *parent)
         m_knownPeers.clear();
         m_offlineMessages.clear();
     }
-    QSettings themeSettings(QStringLiteral("LANChat"), QStringLiteral("LANChat"));
+    QSettings themeSettings(QStringLiteral("Exe Innovate"), QStringLiteral("Blinq Messenger"));
     m_chatService->setLocalThemeColor(appThemeForKey(themeSettings.value(QStringLiteral("app/themeName"), QStringLiteral("msnBlue")).toString()).accent);
     buildUi();
     buildMenus();
@@ -738,7 +763,20 @@ MainWindow::MainWindow(QWidget *parent)
     QTimer::singleShot(250, this, [this] {
         setupSounds();
     });
-    QTimer::singleShot(650, this, &MainWindow::showWelcomeDialog);
+    QTimer::singleShot(0, this, [this] {
+        if (isVisible()) {
+            positionAtBottomRight();
+        }
+    });
+}
+
+void MainWindow::startConnectionServices()
+{
+    if (m_connectionServicesStarted) {
+        return;
+    }
+    m_connectionServicesStarted = true;
+
     if (isInternetMode()) {
         QTimer::singleShot(300, this, [this] {
             m_internetRelay->connectToServer(m_settings.internetServerHost,
@@ -771,6 +809,18 @@ MainWindow::MainWindow(QWidget *parent)
     });
 }
 
+void MainWindow::showInitialWindow()
+{
+    if (shouldShowWelcomeDialog()) {
+        showWelcomeDialog();
+    }
+    show();
+    positionAtBottomRight();
+    raise();
+    activateWindow();
+    startConnectionServices();
+}
+
 MainWindow::~MainWindow()
 {
     delete ui;
@@ -779,8 +829,18 @@ MainWindow::~MainWindow()
 bool MainWindow::nativeEvent(const QByteArray &eventType, void *message, qintptr *result)
 {
     Q_UNUSED(eventType);
-    Q_UNUSED(message);
     Q_UNUSED(result);
+#ifdef Q_OS_WIN
+    auto *msg = static_cast<MSG *>(message);
+    if (msg && msg->message == WM_POWERBROADCAST) {
+        const auto event = static_cast<UINT>(msg->wParam);
+        if (event == PBT_APMRESUMEAUTOMATIC || event == PBT_APMRESUMESUSPEND || event == PBT_APMRESUMECRITICAL) {
+            QTimer::singleShot(1500, this, &MainWindow::refreshConnection);
+        }
+    }
+#else
+    Q_UNUSED(message);
+#endif
     return false;
 }
 
@@ -838,6 +898,14 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         }
     }
 
+    if (watched == m_localAvatar && event->type() == QEvent::MouseButtonPress) {
+        auto *mouseEvent = static_cast<QMouseEvent *>(event);
+        if (mouseEvent->button() == Qt::LeftButton) {
+            setAvatar();
+            return true;
+        }
+    }
+
     return QMainWindow::eventFilter(watched, event);
 }
 
@@ -864,6 +932,9 @@ void MainWindow::buildUi()
     m_localAvatar->setObjectName(QStringLiteral("LocalAvatar"));
     m_localAvatar->setFixedSize(64, 64);
     m_localAvatar->setAlignment(Qt::AlignCenter);
+    m_localAvatar->setCursor(Qt::PointingHandCursor);
+    m_localAvatar->setToolTip(tr("Set avatar"));
+    m_localAvatar->installEventFilter(this);
     profileLayout->addWidget(m_localAvatar, 0, Qt::AlignTop);
 
     auto *profileText = new QWidget(profile);
@@ -1017,6 +1088,8 @@ void MainWindow::buildMenus()
     auto *settingsAction = profileMenu->addAction(QIcon(QStringLiteral(":/icons/assets/settings.png")), tr("Settings"));
     auto *switchModeAction = profileMenu->addAction(QIcon(QStringLiteral(":/icons/assets/reconnect.png")),
                                                     isInternetMode() ? tr("Switch to LAN Mode") : tr("Switch to Internet Mode"));
+    auto *signOutAction = profileMenu->addAction(QIcon(QStringLiteral(":/icons/assets/exit.png")), tr("Sign Out"));
+    signOutAction->setVisible(isInternetMode());
     profileMenu->addSeparator();
     auto *quit = profileMenu->addAction(QIcon(QStringLiteral(":/icons/assets/exit.png")), tr("Quit"));
 
@@ -1025,6 +1098,7 @@ void MainWindow::buildMenus()
     auto *addInternetContactAction = chatMenu->addAction(QIcon(QStringLiteral(":/icons/assets/add.png")), tr("Add Contact..."));
     auto *clearPublicHistoryAction = chatMenu->addAction(QIcon(QStringLiteral(":/icons/assets/clear_history.png")), tr("Clear Public Chat History"));
     auto *directConnectAction = chatMenu->addAction(QIcon(QStringLiteral(":/icons/assets/direct_connect.png")), tr("Direct Connect by IP"));
+    auto *refreshConnectionAction = chatMenu->addAction(QIcon(QStringLiteral(":/icons/assets/reconnect.png")), tr("Refresh Connection"));
     publicChatAction->setVisible(!isInternetMode());
     clearPublicHistoryAction->setVisible(!isInternetMode());
     directConnectAction->setVisible(!isInternetMode());
@@ -1055,7 +1129,7 @@ void MainWindow::buildMenus()
     auto *themeMenu = menuBar()->addMenu(tr("&Theme"));
     auto *themeGroup = new QActionGroup(this);
     themeGroup->setExclusive(true);
-    QSettings themeSettings(QStringLiteral("LANChat"), QStringLiteral("LANChat"));
+    QSettings themeSettings(QStringLiteral("Exe Innovate"), QStringLiteral("Blinq Messenger"));
     const QString currentThemeKey = themeSettings.value(QStringLiteral("app/themeName"), QStringLiteral("msnBlue")).toString();
     const QString effectiveThemeKey = appThemeForKey(currentThemeKey).key;
     for (const AppTheme &theme : appThemes()) {
@@ -1068,40 +1142,16 @@ void MainWindow::buildMenus()
     auto *helpMenu = menuBar()->addMenu(tr("&Help"));
     auto *getHelp = helpMenu->addAction(QIcon(QStringLiteral(":/icons/assets/help.png")), tr("Get Help"));
     auto *checkUpdates = helpMenu->addAction(QIcon(QStringLiteral(":/icons/assets/updates.png")), tr("Check for Updates"));
+    auto *feedbackAction = helpMenu->addAction(QIcon(QStringLiteral(":/icons/assets/feedback.png")), tr("Send Feedback"));
+    auto *donateAction = helpMenu->addAction(QIcon(QStringLiteral(":/icons/assets/favorite.png")), tr("Donate"));
+    helpMenu->addSeparator();
     auto *about = helpMenu->addAction(QIcon(QStringLiteral(":/icons/assets/about.png")), tr("About Blinq Messenger"));
 
     connect(changeName, &QAction::triggered, this, &MainWindow::changeDisplayName);
-    connect(changeAvatar, &QAction::triggered, this, [this] {
-        const QString path = QFileDialog::getOpenFileName(this,
-                                                          tr("Set Avatar"),
-                                                          QString(),
-                                                          tr("Images (*.png *.jpg *.jpeg *.bmp)"));
-        if (!path.isEmpty()) {
-            if (isInternetMode()) {
-                QImage image(path);
-                if (image.isNull()) {
-                    statusBar()->showMessage(tr("Could not load that avatar image."), 7000);
-                    return;
-                }
-                const int squareSize = qMin(image.width(), image.height());
-                const QRect cropRect((image.width() - squareSize) / 2, (image.height() - squareSize) / 2, squareSize, squareSize);
-                image = image.copy(cropRect).scaled(96, 96, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-                QByteArray bytes;
-                QBuffer buffer(&bytes);
-                buffer.open(QIODevice::WriteOnly);
-                image.save(&buffer, "PNG");
-                QSettings themeSettings(QStringLiteral("LANChat"), QStringLiteral("LANChat"));
-                const QString themeKey = themeSettings.value(QStringLiteral("app/themeName"), QStringLiteral("msnBlue")).toString();
-                m_internetRelay->setProfile(m_settings.internetDisplayName, bytes, appThemeForKey(themeKey).accent);
-                updateLocalProfile();
-                return;
-            }
-            m_chatService->setLocalAvatar(path);
-            updateLocalProfile();
-        }
-    });
+    connect(changeAvatar, &QAction::triggered, this, &MainWindow::setAvatar);
     connect(settingsAction, &QAction::triggered, this, &MainWindow::showSettings);
     connect(switchModeAction, &QAction::triggered, this, &MainWindow::switchAppMode);
+    connect(signOutAction, &QAction::triggered, this, &MainWindow::signOutBlinqAccount);
     connect(quit, &QAction::triggered, this, [this] {
         m_reallyQuit = true;
         qApp->quit();
@@ -1109,6 +1159,7 @@ void MainWindow::buildMenus()
     connect(publicChatAction, &QAction::triggered, this, &MainWindow::openPublicChat);
     connect(addInternetContactAction, &QAction::triggered, this, &MainWindow::showAddInternetContactDialog);
     connect(directConnectAction, &QAction::triggered, this, &MainWindow::showDirectConnectDialog);
+    connect(refreshConnectionAction, &QAction::triggered, this, &MainWindow::refreshConnection);
     connect(clearPublicHistoryAction, &QAction::triggered, this, [this] {
         if (m_publicChatWindow) {
             m_publicChatWindow->clearHistory();
@@ -1121,7 +1172,7 @@ void MainWindow::buildMenus()
         setSoundsMuted(!m_settings.muteSounds);
     });
     connect(themeGroup, &QActionGroup::triggered, this, [this](QAction *action) {
-        QSettings settings(QStringLiteral("LANChat"), QStringLiteral("LANChat"));
+        QSettings settings(QStringLiteral("Exe Innovate"), QStringLiteral("Blinq Messenger"));
         const QString themeKey = action->data().toString();
         settings.setValue(QStringLiteral("app/themeName"), themeKey);
         settings.remove(QStringLiteral("app/themeGradient"));
@@ -1143,6 +1194,8 @@ void MainWindow::buildMenus()
     connect(networkDiagnosticsAction, &QAction::triggered, this, &MainWindow::showConnectionInfo);
     connect(getHelp, &QAction::triggered, this, &MainWindow::showHelp);
     connect(checkUpdates, &QAction::triggered, this, &MainWindow::showUpdateDialog);
+    connect(feedbackAction, &QAction::triggered, this, &MainWindow::showFeedbackDialog);
+    connect(donateAction, &QAction::triggered, this, &MainWindow::showDonateDialog);
     connect(about, &QAction::triggered, this, &MainWindow::showAbout);
 }
 
@@ -1150,6 +1203,7 @@ void MainWindow::buildTrayIcon()
 {
     m_trayMenu = new QMenu(this);
     auto *showAction = m_trayMenu->addAction(QIcon(QStringLiteral(":/icons/assets/appicon.ico")), tr("Show Blinq Messenger"));
+    auto *refreshConnectionAction = m_trayMenu->addAction(QIcon(QStringLiteral(":/icons/assets/reconnect.png")), tr("Refresh Connection"));
     QAction *connectionInfoAction = nullptr;
     if (!isInternetMode()) {
         connectionInfoAction = m_trayMenu->addAction(QIcon(QStringLiteral(":/icons/assets/connection_info.png")), tr("Network Diagnostics"));
@@ -1189,6 +1243,7 @@ void MainWindow::buildTrayIcon()
     connect(showAction, &QAction::triggered, this, [this] {
         showFromTray();
     });
+    connect(refreshConnectionAction, &QAction::triggered, this, &MainWindow::refreshConnection);
     if (connectionInfoAction) {
         connect(connectionInfoAction, &QAction::triggered, this, &MainWindow::showConnectionInfo);
     }
@@ -1282,11 +1337,11 @@ void MainWindow::connectSignals()
             playReceivedSound();
         } else if (notify) {
             const QString senderName = peerName.isEmpty() ? tr("Someone") : peerName;
-            QString notificationMessage = tr("%1: %2").arg(senderName, message);
+            QString notificationMessage = message;
             if (isHtml) {
-                notificationMessage = tr("%1 sent a rich message").arg(senderName);
+                notificationMessage = tr("Sent a rich message");
             }
-            if (showIncomingNotification(m_peers.value(peerId), notificationMessage)) {
+            if (showIncomingNotification(m_peers.value(peerId), notificationMessage, senderName)) {
                 playNotificationSound();
             } else {
                 playReceivedSound();
@@ -1440,16 +1495,22 @@ void MainWindow::connectSignals()
         statusBar()->showMessage(message, 7000);
     });
     connect(m_internetRelay, &InternetRelayService::authenticated, this, [this](const QString &token, const InternetRelayPeer &self) {
+        const bool wasRefreshing = m_refreshingConnection;
+        m_refreshingConnection = false;
         m_settings.internetAuthToken = token;
         m_settings.internetBlinqId = self.blinqId;
         m_settings.internetDisplayName = self.displayName;
+        const QByteArray avatarData = QByteArray::fromBase64(self.avatar.toLatin1());
+        if (!avatarData.isEmpty()) {
+            m_internetAvatarData = avatarData;
+        }
         saveSettings();
         updateLocalProfile();
         m_isLoading = false;
         rebuildInternetContacts();
         updateNetworkStatus();
         statusBar()->showMessage(tr("Signed in as %1.").arg(self.blinqId), 6000);
-        QSettings themeSettings(QStringLiteral("LANChat"), QStringLiteral("LANChat"));
+        QSettings themeSettings(QStringLiteral("Exe Innovate"), QStringLiteral("Blinq Messenger"));
         const QString themeKey = themeSettings.value(QStringLiteral("app/themeName"), QStringLiteral("msnBlue")).toString();
         m_internetRelay->setProfile(m_settings.internetDisplayName, QByteArray(), appThemeForKey(themeKey).accent);
         const QString internetPersonalMessage = m_settings.showPlayingInfo && !m_currentMediaText.isEmpty()
@@ -1457,6 +1518,9 @@ void MainWindow::connectSignals()
                                                     : m_manualPersonalMessage;
         m_internetRelay->setPresence(m_statusCombo->currentText(), internetPersonalMessage);
         m_internetRelay->setSearchable(m_settings.internetSearchable);
+        if (wasRefreshing) {
+            statusBar()->showMessage(tr("Internet connection refreshed."), 5000);
+        }
         QTimer::singleShot(300, this, [this] {
             for (const InternetContactRequest &request : m_internetRelay->contactRequests()) {
                 const QString name = request.fromUser.displayName.isEmpty() ? request.fromUser.blinqId : request.fromUser.displayName;
@@ -1474,6 +1538,22 @@ void MainWindow::connectSignals()
         });
     });
     connect(m_internetRelay, &InternetRelayService::disconnectedFromServer, this, [this] {
+        if (m_signingOut) {
+            statusBar()->showMessage(tr("Signed out."), 5000);
+            updateNetworkStatus();
+            if (isInternetMode()) {
+                showInternetSignInDialog();
+            }
+            QTimer::singleShot(1000, this, [this] {
+                m_signingOut = false;
+            });
+            return;
+        }
+        if (m_refreshingConnection) {
+            statusBar()->showMessage(tr("Reconnecting to the Blinq Internet server..."), 7000);
+            updateNetworkStatus();
+            return;
+        }
         if (isInternetMode() && !m_reallyQuit) {
             handleInternetServerUnavailable(tr("Disconnected from the Blinq Internet server."));
             return;
@@ -1488,12 +1568,35 @@ void MainWindow::connectSignals()
         updateEmptyContactsLabel();
     });
     connect(m_internetRelay, &InternetRelayService::connectionFailed, this, [this](const QString &reason) {
+        if (m_signingOut) {
+            statusBar()->showMessage(tr("Signed out."), 5000);
+            updateNetworkStatus();
+            return;
+        }
+        if (m_refreshingConnection) {
+            m_refreshingConnection = false;
+            m_isLoading = false;
+            statusBar()->showMessage(tr("Internet connection refresh failed: %1").arg(reason), 7000);
+            updateEmptyContactsLabel();
+            updateNetworkStatus();
+            return;
+        }
         statusBar()->showMessage(tr("Blinq server connection failed: %1").arg(reason), 7000);
         if (isInternetMode() && !m_internetRelay->isAuthenticated() && !m_authDialogOpen) {
             showInternetSignInDialog();
         }
     });
     connect(m_internetRelay, &InternetRelayService::serverUnavailable, this, [this](const QString &reason) {
+        if (m_signingOut) {
+            statusBar()->showMessage(tr("Signed out."), 5000);
+            updateNetworkStatus();
+            return;
+        }
+        if (m_refreshingConnection) {
+            statusBar()->showMessage(tr("Still reconnecting to the Blinq Internet server: %1").arg(reason), 7000);
+            updateNetworkStatus();
+            return;
+        }
         handleInternetServerUnavailable(tr("Could not connect to the Blinq Internet server:\n%1").arg(reason));
     });
     connect(m_internetRelay, &InternetRelayService::errorOccurred, this, [this](const QString &message) {
@@ -1506,6 +1609,16 @@ void MainWindow::connectSignals()
         m_settings.appMode = QStringLiteral("lan");
         saveSettings();
         restartApplication();
+    });
+    connect(m_internetRelay, &InternetRelayService::signedOut, this, [this] {
+        m_settings.internetAuthToken.clear();
+        saveSettings();
+        statusBar()->showMessage(tr("Signed out."), 5000);
+        updateNetworkStatus();
+        showInternetSignInDialog();
+        QTimer::singleShot(3000, this, [this] {
+            m_signingOut = false;
+        });
     });
     connect(m_internetRelay, &InternetRelayService::contactsChanged, this, &MainWindow::rebuildInternetContacts);
     connect(m_internetRelay, &InternetRelayService::contactRequestReceived, this, [this](const InternetContactRequest &request) {
@@ -1558,9 +1671,9 @@ void MainWindow::connectSignals()
                                        ? (peer.name.isEmpty() ? tr("Someone") : peer.name)
                                        : peerName;
         const QString notificationMessage = isHtml
-                                                ? tr("%1 sent a rich message").arg(senderName)
-                                                : tr("%1: %2").arg(senderName, message);
-        if (notify && showIncomingNotification(peer, notificationMessage)) {
+                                                ? tr("Sent a rich message")
+                                                : message;
+        if (notify && showIncomingNotification(peer, notificationMessage, senderName)) {
             playNotificationSound();
         } else {
             playReceivedSound();
@@ -1698,19 +1811,22 @@ void MainWindow::connectSignals()
             window->showNormal();
             window->raise();
             window->activateWindow();
+            m_publicChatUnattendedSince = QDateTime();
+            m_lastPublicChatNotificationAt = QDateTime();
             playReceivedSound();
         } else if (notify) {
-            const QString senderLabel = peerName.isEmpty() ? tr("Someone") : peerName;
-            QString notificationMessage = tr("%1 in Public Chat: %2").arg(senderLabel, message);
-            if (isHtml) {
-                notificationMessage = tr("%1 sent a rich message in Public Chat").arg(senderLabel);
+            if (!m_publicChatUnattendedSince.isValid()) {
+                const QDateTime now = QDateTime::currentDateTimeUtc();
+                m_publicChatUnattendedSince = (!window->isVisible() || window->isMinimized())
+                                                  ? now.addMSecs(-PublicChatUnattendedDelayMs)
+                                                  : now;
             }
-            if (showPublicIncomingNotification(peerName, notificationMessage)) {
+            if (showPublicIncomingNotification()) {
                 playNotificationSound();
-            } else {
-                playReceivedSound();
             }
         } else {
+            m_publicChatUnattendedSince = QDateTime();
+            m_lastPublicChatNotificationAt = QDateTime();
             playReceivedSound();
         }
     });
@@ -1761,7 +1877,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
 
 void MainWindow::loadSettings()
 {
-    QSettings settings(QStringLiteral("LANChat"), QStringLiteral("LANChat"));
+    QSettings settings(QStringLiteral("Exe Innovate"), QStringLiteral("Blinq Messenger"));
     m_settings.showNotifications = settings.value(QStringLiteral("app/showNotifications"), true).toBool();
     m_settings.directMessageNotifications = settings.value(QStringLiteral("app/directMessageNotifications"), true).toBool();
     m_settings.publicChatNotifications = settings.value(QStringLiteral("app/publicChatNotifications"), true).toBool();
@@ -1798,6 +1914,10 @@ void MainWindow::loadSettings()
     }
     m_settings.internetBlinqId = settings.value(QStringLiteral("internet/blinqId")).toString();
     m_settings.internetDisplayName = settings.value(QStringLiteral("internet/displayName")).toString();
+    m_internetAvatarData = settings.value(QStringLiteral("internet/avatar")).toByteArray();
+    if (m_internetAvatarData.isEmpty()) {
+        m_internetAvatarData = settings.value(QStringLiteral("profile/avatar")).toByteArray();
+    }
     m_settings.manualPeerAddresses = settings.value(QStringLiteral("app/manualPeerAddresses")).toStringList();
     m_settings.manualPeerAddresses.removeDuplicates();
     const QStringList blockedPeers = settings.value(QStringLiteral("app/blockedPeers")).toStringList();
@@ -1836,7 +1956,7 @@ void MainWindow::loadSettings()
 
 void MainWindow::saveSettings() const
 {
-    QSettings settings(QStringLiteral("LANChat"), QStringLiteral("LANChat"));
+    QSettings settings(QStringLiteral("Exe Innovate"), QStringLiteral("Blinq Messenger"));
     settings.setValue(QStringLiteral("app/showNotifications"), m_settings.showNotifications);
     settings.setValue(QStringLiteral("app/directMessageNotifications"), m_settings.directMessageNotifications);
     settings.setValue(QStringLiteral("app/publicChatNotifications"), m_settings.publicChatNotifications);
@@ -1862,6 +1982,7 @@ void MainWindow::saveSettings() const
     settings.remove(QStringLiteral("internet/authToken"));
     settings.setValue(QStringLiteral("internet/blinqId"), m_settings.internetBlinqId);
     settings.setValue(QStringLiteral("internet/displayName"), m_settings.internetDisplayName);
+    settings.setValue(QStringLiteral("internet/avatar"), m_internetAvatarData);
     settings.setValue(QStringLiteral("app/manualPeerAddresses"), m_settings.manualPeerAddresses);
     settings.remove(QStringLiteral("app/allowPublicPrivateChatRequests"));
     settings.remove(QStringLiteral("app/privateChatTrustLevel"));
@@ -1903,8 +2024,8 @@ void MainWindow::applyLaunchWithWindowsSetting() const
         runKey.setValue(QStringLiteral("Blinq Messenger"), command);
         runKey.remove(QStringLiteral("LANChat"));
     } else {
-        runKey.remove(QStringLiteral("LANChat"));
         runKey.remove(QStringLiteral("Blinq Messenger"));
+        runKey.remove(QStringLiteral("LANChat"));
     }
 #endif
 }
@@ -1912,8 +2033,14 @@ void MainWindow::applyLaunchWithWindowsSetting() const
 void MainWindow::applyTheme()
 {
     qApp->setStyleSheet(appStyleSheet());
-    QSettings settings(QStringLiteral("LANChat"), QStringLiteral("LANChat"));
+    QSettings settings(QStringLiteral("Exe Innovate"), QStringLiteral("Blinq Messenger"));
     const QColor localAccent(appThemeForKey(settings.value(QStringLiteral("app/themeName"), QStringLiteral("msnBlue")).toString()).accent);
+    if (m_localAvatar && m_localName && m_statusCombo) {
+        updateLocalProfile();
+    }
+    if (m_peerList) {
+        rebuildContactList();
+    }
     for (ChatWindow *window : std::as_const(m_chatWindows)) {
         if (window) {
             window->setLocalAccentColor(localAccent);
@@ -1938,7 +2065,7 @@ void MainWindow::applyTheme()
 
 QString MainWindow::appStyleSheet() const
 {
-    QSettings settings(QStringLiteral("LANChat"), QStringLiteral("LANChat"));
+    QSettings settings(QStringLiteral("Exe Innovate"), QStringLiteral("Blinq Messenger"));
     const QString themeKey = settings.value(QStringLiteral("app/themeName"), QStringLiteral("msnBlue")).toString();
     const AppTheme theme = appThemeForKey(themeKey);
 
@@ -1946,7 +2073,7 @@ QString MainWindow::appStyleSheet() const
         "QMainWindow, QDialog, QWidget { background: %1; color: #111827; font-family: 'Segoe UI'; font-size: 9.5pt; }"
         "QWidget#ProfilePanel { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 %2, stop:0.58 %3, stop:1 %9); border: 1px solid %4; border-radius: 8px; }"
         "QWidget#ProfileInfoPanel { background: transparent; border: none; }"
-        "QLabel#LocalAvatar { background: rgba(255,255,255,220); border: 1px solid %4; border-radius: 6px; padding: 3px; }"
+        "QLabel#LocalAvatar { background: transparent; border: none; padding: 0px; }"
         "QLabel#LocalNameLabel { color: #0f172a; font-size: 18px; font-weight: 750; background: transparent; }"
         "QLineEdit#LocalPersonalMessageEdit { background: transparent; border: 1px solid transparent; padding: 1px 2px; color: #334155; font-style: italic; font-size: 11px; border-radius: 4px; }"
         "QLineEdit#LocalPersonalMessageEdit:hover, QLineEdit#LocalPersonalMessageEdit:focus { border: 1px solid %5; background: rgba(255,255,255,165); }"
@@ -2096,10 +2223,13 @@ void MainWindow::openChat(const QString &peerId)
     window->activateWindow();
     window->setFocus();
     sendPendingReadReceipts(peerId);
+    clearUnreadForPeer(peerId);
 }
 
 void MainWindow::openPublicChat()
 {
+    m_publicChatUnattendedSince = QDateTime();
+    m_lastPublicChatNotificationAt = QDateTime();
     if (!m_publicChatWindow) {
         m_publicChatWindow = new PublicChatWindow();
         m_publicChatWindow->setAttribute(Qt::WA_DeleteOnClose);
@@ -2172,6 +2302,10 @@ void MainWindow::showInternetSignInDialog()
     signInPassword->setEchoMode(QLineEdit::Password);
     signInForm->addRow(tr("Blinq ID"), signInId);
     signInForm->addRow(tr("Password"), signInPassword);
+    auto *forgotPassword = new QPushButton(tr("Forgot password?"), signInPage);
+    forgotPassword->setFlat(true);
+    forgotPassword->setCursor(Qt::PointingHandCursor);
+    signInForm->addRow(QString(), forgotPassword);
     tabs->addTab(signInPage, tr("Sign In"));
 
     auto *createPage = new QWidget(tabs);
@@ -2180,6 +2314,8 @@ void MainWindow::showInternetSignInDialog()
     auto *createUsername = new QLineEdit(createPage);
     createUsername->setPlaceholderText(tr("username"));
     auto *createDisplayName = new QLineEdit(m_chatService->localName(), createPage);
+    auto *createEmail = new QLineEdit(createPage);
+    createEmail->setPlaceholderText(tr("you@example.com"));
     auto *createPassword = new QLineEdit(createPage);
     createPassword->setEchoMode(QLineEdit::Password);
     auto *confirmPassword = new QLineEdit(createPage);
@@ -2187,6 +2323,7 @@ void MainWindow::showInternetSignInDialog()
     createForm->addRow(tr("Blinq ID"), createUsername);
     createForm->addRow(QString(), new QLabel(tr("@blinqm.net"), createPage));
     createForm->addRow(tr("Display name"), createDisplayName);
+    createForm->addRow(tr("Recovery email"), createEmail);
     createForm->addRow(tr("Password"), createPassword);
     createForm->addRow(tr("Confirm"), confirmPassword);
     tabs->addTab(createPage, tr("Create Account"));
@@ -2209,7 +2346,15 @@ void MainWindow::showInternetSignInDialog()
         return value;
     };
 
-    connect(submitButton, &QPushButton::clicked, &dialog, [this, tabs, signInId, signInPassword, createUsername, createDisplayName, createPassword, confirmPassword, statusLabel, submitButton, normalizeId] {
+    bool openingPasswordReset = false;
+    connect(forgotPassword, &QPushButton::clicked, &dialog, [this, signInId, &dialog, &openingPasswordReset] {
+        const QString identifier = signInId->text().trimmed();
+        openingPasswordReset = true;
+        dialog.reject();
+        showPasswordResetDialog(identifier);
+    });
+
+    connect(submitButton, &QPushButton::clicked, &dialog, [this, tabs, signInId, signInPassword, createUsername, createDisplayName, createEmail, createPassword, confirmPassword, statusLabel, submitButton, normalizeId] {
         if (m_internetRelay->isAuthenticated()) {
             return;
         }
@@ -2236,9 +2381,16 @@ void MainWindow::showInternetSignInDialog()
             submitButton->setEnabled(true);
             return;
         }
+        static const QRegularExpression emailPattern(QStringLiteral("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"));
+        const QString email = createEmail->text().trimmed();
+        if (!emailPattern.match(email).hasMatch()) {
+            statusLabel->setText(tr("Enter a valid recovery email address."));
+            submitButton->setEnabled(true);
+            return;
+        }
         m_settings.internetBlinqId = QStringLiteral("%1@blinqm.net").arg(username);
         saveSettings();
-        m_internetRelay->signUp(username, createPassword->text(), createDisplayName->text());
+        m_internetRelay->signUp(username, createPassword->text(), createDisplayName->text(), email);
     });
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
 
@@ -2258,6 +2410,132 @@ void MainWindow::showInternetSignInDialog()
     });
 
     dialog.resize(430, dialog.sizeHint().height());
+    const int result = dialog.exec();
+    if (result == QDialog::Rejected
+        && !openingPasswordReset
+        && isInternetMode()
+        && !m_internetRelay->isAuthenticated()
+        && m_settings.internetAuthToken.isEmpty()) {
+        m_settings.appMode = QStringLiteral("lan");
+        saveSettings();
+        restartApplication();
+    }
+}
+
+void MainWindow::showPasswordResetDialog(const QString &identifier)
+{
+    QDialog dialog(dialogParent());
+    dialog.setWindowTitle(tr("Reset Blinq Password"));
+    dialog.setStyleSheet(appStyleSheet());
+
+    auto *layout = new QVBoxLayout(&dialog);
+    layout->setContentsMargins(14, 14, 14, 14);
+    layout->setSpacing(10);
+
+    auto *intro = new QLabel(tr("Enter your Blinq ID or recovery email. If the account has a recovery email, Blinq will send a 6-digit code that expires in 5 minutes."), &dialog);
+    intro->setWordWrap(true);
+    intro->setStyleSheet(QStringLiteral("color:#475569;"));
+    layout->addWidget(intro);
+
+    auto *form = new QFormLayout();
+    form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    auto *identifierEdit = new QLineEdit(identifier, &dialog);
+    identifierEdit->setPlaceholderText(tr("username@blinqm.net or email"));
+    auto *codeEdit = new QLineEdit(&dialog);
+    codeEdit->setPlaceholderText(tr("6-digit code"));
+    codeEdit->setMaxLength(6);
+    auto *newPassword = new QLineEdit(&dialog);
+    newPassword->setEchoMode(QLineEdit::Password);
+    auto *confirmPassword = new QLineEdit(&dialog);
+    confirmPassword->setEchoMode(QLineEdit::Password);
+    form->addRow(tr("Account"), identifierEdit);
+    form->addRow(tr("Code"), codeEdit);
+    form->addRow(tr("New password"), newPassword);
+    form->addRow(tr("Confirm"), confirmPassword);
+    layout->addLayout(form);
+
+    auto *statusLabel = new QLabel(&dialog);
+    statusLabel->setWordWrap(true);
+    statusLabel->setStyleSheet(QStringLiteral("color:#64748b;"));
+    layout->addWidget(statusLabel);
+
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Cancel, &dialog);
+    auto *sendCodeButton = buttons->addButton(tr("Send Code"), QDialogButtonBox::ActionRole);
+    auto *resetButton = buttons->addButton(tr("Reset Password"), QDialogButtonBox::AcceptRole);
+    layout->addWidget(buttons);
+
+    const auto ensureConnection = [this] {
+        if (!m_internetRelay->isAuthenticated()) {
+            m_internetRelay->connectToServer(m_settings.internetServerHost,
+                                             static_cast<quint16>(m_settings.internetServerPort));
+        }
+    };
+
+    connect(sendCodeButton, &QPushButton::clicked, &dialog, [this, identifierEdit, statusLabel, sendCodeButton, ensureConnection] {
+        const QString account = identifierEdit->text().trimmed();
+        if (account.size() < 3) {
+            statusLabel->setText(tr("Enter your Blinq ID or recovery email."));
+            return;
+        }
+        sendCodeButton->setEnabled(false);
+        statusLabel->setText(tr("Requesting reset code..."));
+        ensureConnection();
+        m_internetRelay->requestPasswordReset(account);
+    });
+
+    connect(resetButton, &QPushButton::clicked, &dialog, [this, identifierEdit, codeEdit, newPassword, confirmPassword, statusLabel, resetButton, ensureConnection] {
+        const QString account = identifierEdit->text().trimmed();
+        const QString code = codeEdit->text().trimmed();
+        const QString next = newPassword->text();
+        if (account.size() < 3) {
+            statusLabel->setText(tr("Enter your Blinq ID or recovery email."));
+            return;
+        }
+        if (!QRegularExpression(QStringLiteral("^\\d{6}$")).match(code).hasMatch()) {
+            statusLabel->setText(tr("Enter the 6-digit reset code."));
+            return;
+        }
+        if (next.size() < 8) {
+            statusLabel->setText(tr("New password must be at least 8 characters."));
+            return;
+        }
+        if (next != confirmPassword->text()) {
+            statusLabel->setText(tr("New passwords do not match."));
+            return;
+        }
+        resetButton->setEnabled(false);
+        statusLabel->setText(tr("Resetting password..."));
+        ensureConnection();
+        m_internetRelay->resetPassword(account, code, next);
+    });
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+    QMetaObject::Connection requestedConnection;
+    QMetaObject::Connection resetConnection;
+    QMetaObject::Connection failedConnection;
+    requestedConnection = connect(m_internetRelay, &InternetRelayService::passwordResetRequested, &dialog, [statusLabel, sendCodeButton] {
+        statusLabel->setText(QObject::tr("If that account has a recovery email, a reset code was sent."));
+        sendCodeButton->setEnabled(true);
+    });
+    resetConnection = connect(m_internetRelay, &InternetRelayService::passwordReset, &dialog, [this, &dialog] {
+        QMessageBox::information(&dialog,
+                                 tr("Password Reset"),
+                                 tr("Your password was reset. You can sign in with the new password."));
+        dialog.accept();
+        showInternetSignInDialog();
+    });
+    failedConnection = connect(m_internetRelay, &InternetRelayService::connectionFailed, &dialog, [statusLabel, sendCodeButton, resetButton](const QString &reason) {
+        statusLabel->setText(reason);
+        sendCodeButton->setEnabled(true);
+        resetButton->setEnabled(true);
+    });
+    connect(&dialog, &QObject::destroyed, this, [this, requestedConnection, resetConnection, failedConnection] {
+        disconnect(requestedConnection);
+        disconnect(resetConnection);
+        disconnect(failedConnection);
+    });
+
+    dialog.resize(460, dialog.sizeHint().height());
     dialog.exec();
 }
 
@@ -2403,6 +2681,22 @@ void MainWindow::switchAppMode()
 {
     const bool switchingToInternet = !isInternetMode();
     const QString targetMode = switchingToInternet ? tr("Internet Mode") : tr("LAN Mode");
+    if (switchingToInternet) {
+        statusBar()->showMessage(tr("Checking internet connection..."), 5000);
+        QString errorMessage;
+        if (!canReachInternetServer(&errorMessage)) {
+            statusBar()->showMessage(tr("Internet Mode is not available."), 7000);
+            QMessageBox::warning(dialogParent(),
+                                 tr("Internet Mode Unavailable"),
+                                 tr("Blinq Messenger could not reach the Internet server.\n\n"
+                                    "Check your internet connection and try again.\n\n"
+                                    "Details: %1")
+                                     .arg(errorMessage.isEmpty() ? tr("No connection.") : errorMessage));
+            return;
+        }
+        statusBar()->clearMessage();
+    }
+
     if (QMessageBox::question(dialogParent(),
                               tr("Switch Mode"),
                               tr("Switch to %1? Blinq Messenger will restart.").arg(targetMode),
@@ -2415,6 +2709,88 @@ void MainWindow::switchAppMode()
     m_settings.appMode = switchingToInternet ? QStringLiteral("internet") : QStringLiteral("lan");
     saveSettings();
     restartApplication();
+}
+
+bool MainWindow::canReachInternetServer(QString *errorMessage) const
+{
+    const QString host = m_settings.internetServerHost.trimmed();
+    if (host.isEmpty()) {
+        if (errorMessage) {
+            *errorMessage = tr("The Internet server address is not configured.");
+        }
+        return false;
+    }
+    if (m_settings.internetServerPort < 1 || m_settings.internetServerPort > 65535) {
+        if (errorMessage) {
+            *errorMessage = tr("The Internet server port is not valid.");
+        }
+        return false;
+    }
+
+    QTcpSocket socket;
+    socket.connectToHost(host, static_cast<quint16>(m_settings.internetServerPort));
+    if (!socket.waitForConnected(3000)) {
+        if (errorMessage) {
+            *errorMessage = socket.errorString();
+        }
+        return false;
+    }
+
+    socket.disconnectFromHost();
+    if (socket.state() != QAbstractSocket::UnconnectedState) {
+        socket.waitForDisconnected(250);
+    }
+    return true;
+}
+
+void MainWindow::signOutBlinqAccount()
+{
+    if (!isInternetMode()) {
+        return;
+    }
+
+    const QString blinqId = m_settings.internetBlinqId.isEmpty()
+                                ? m_internetRelay->self().blinqId
+                                : m_settings.internetBlinqId;
+    if (QMessageBox::question(dialogParent(),
+                              tr("Sign Out"),
+                              tr("Sign out of %1 on this computer?").arg(blinqId.isEmpty() ? tr("this Blinq account") : blinqId),
+                              QMessageBox::Yes | QMessageBox::No,
+                              QMessageBox::No)
+        != QMessageBox::Yes) {
+        return;
+    }
+
+    m_signingOut = true;
+    m_refreshingConnection = false;
+    m_settings.internetAuthToken.clear();
+    saveSettings();
+    m_peers.clear();
+    m_knownPeers.clear();
+    m_typingPeers.clear();
+    m_pendingReadReceipts.clear();
+    rebuildContactList();
+    updateContactsLabel();
+    updateEmptyContactsLabel();
+    statusBar()->showMessage(tr("Signed out."), 5000);
+
+    if (m_internetRelay->isAuthenticated()) {
+        m_internetRelay->logout();
+    } else {
+        m_internetRelay->disconnectFromServer();
+    }
+
+    QTimer::singleShot(250, this, [this] {
+        if (m_internetRelay->isAuthenticated()) {
+            m_internetRelay->disconnectFromServer();
+        }
+        if (isInternetMode()) {
+            showInternetSignInDialog();
+        }
+        QTimer::singleShot(3000, this, [this] {
+            m_signingOut = false;
+        });
+    });
 }
 
 void MainWindow::deleteBlinqAccount()
@@ -2491,6 +2867,21 @@ void MainWindow::changeBlinqPassword()
     auto *changeButton = buttons->addButton(tr("Change Password"), QDialogButtonBox::AcceptRole);
     layout->addWidget(buttons);
 
+    auto *recoveryLabel = new QLabel(tr("Recovery email"), &dialog);
+    recoveryLabel->setStyleSheet(QStringLiteral("font-weight:650; margin-top:10px;"));
+    layout->addWidget(recoveryLabel);
+    auto *recoveryForm = new QFormLayout();
+    recoveryForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    auto *recoveryEmail = new QLineEdit(&dialog);
+    recoveryEmail->setPlaceholderText(tr("you@example.com"));
+    auto *recoveryPassword = new QLineEdit(&dialog);
+    recoveryPassword->setEchoMode(QLineEdit::Password);
+    recoveryForm->addRow(tr("Email"), recoveryEmail);
+    recoveryForm->addRow(tr("Current password"), recoveryPassword);
+    layout->addLayout(recoveryForm);
+    auto *recoveryButton = new QPushButton(tr("Save Recovery Email"), &dialog);
+    layout->addWidget(recoveryButton, 0, Qt::AlignRight);
+
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     connect(changeButton, &QPushButton::clicked, &dialog, [this, currentPassword, newPassword, confirmPassword, statusLabel, changeButton] {
         const QString current = currentPassword->text();
@@ -2511,6 +2902,21 @@ void MainWindow::changeBlinqPassword()
         statusLabel->setText(tr("Changing password..."));
         m_internetRelay->changePassword(current, next);
     });
+    connect(recoveryButton, &QPushButton::clicked, &dialog, [this, recoveryEmail, recoveryPassword, statusLabel, recoveryButton] {
+        static const QRegularExpression emailPattern(QStringLiteral("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"));
+        const QString email = recoveryEmail->text().trimmed();
+        if (!emailPattern.match(email).hasMatch()) {
+            statusLabel->setText(tr("Enter a valid recovery email address."));
+            return;
+        }
+        if (recoveryPassword->text().isEmpty()) {
+            statusLabel->setText(tr("Enter your current password."));
+            return;
+        }
+        recoveryButton->setEnabled(false);
+        statusLabel->setText(tr("Saving recovery email..."));
+        m_internetRelay->setRecoveryEmail(email, recoveryPassword->text());
+    });
     connect(m_internetRelay, &InternetRelayService::passwordChanged, &dialog, [this, &dialog] {
         QMessageBox::information(&dialog,
                                  tr("Password Changed"),
@@ -2518,9 +2924,15 @@ void MainWindow::changeBlinqPassword()
         dialog.accept();
         statusBar()->showMessage(tr("Blinq password changed."), 5000);
     });
-    connect(m_internetRelay, &InternetRelayService::errorOccurred, &dialog, [statusLabel, changeButton](const QString &message) {
+    connect(m_internetRelay, &InternetRelayService::recoveryEmailSet, &dialog, [this, statusLabel, recoveryButton] {
+        statusLabel->setText(tr("Recovery email saved."));
+        recoveryButton->setEnabled(true);
+        statusBar()->showMessage(tr("Blinq recovery email saved."), 5000);
+    });
+    connect(m_internetRelay, &InternetRelayService::errorOccurred, &dialog, [statusLabel, changeButton, recoveryButton](const QString &message) {
         statusLabel->setText(message);
         changeButton->setEnabled(true);
+        recoveryButton->setEnabled(true);
     });
 
     dialog.resize(430, dialog.sizeHint().height());
@@ -2529,7 +2941,7 @@ void MainWindow::changeBlinqPassword()
 
 void MainWindow::handleInternetServerUnavailable(const QString &reason)
 {
-    if (!isInternetMode() || m_reallyQuit) {
+    if (!isInternetMode() || m_reallyQuit || m_signingOut) {
         return;
     }
 
@@ -2548,7 +2960,16 @@ void MainWindow::handleInternetServerUnavailable(const QString &reason)
 void MainWindow::restartApplication()
 {
     m_reallyQuit = true;
-    QProcess::startDetached(QCoreApplication::applicationFilePath(), QCoreApplication::arguments().mid(1));
+    QStringList arguments = QCoreApplication::arguments().mid(1);
+    arguments.removeAll(QStringLiteral("--restarted"));
+    arguments.append(QStringLiteral("--restarted"));
+    if (!QProcess::startDetached(QCoreApplication::applicationFilePath(), arguments)) {
+        m_reallyQuit = false;
+        QMessageBox::warning(dialogParent(),
+                             tr("Restart Failed"),
+                             tr("Blinq Messenger could not restart automatically. Please open it again manually."));
+        return;
+    }
     qApp->quit();
 }
 
@@ -2578,6 +2999,43 @@ void MainWindow::changeDisplayName()
     }
 }
 
+void MainWindow::setAvatar()
+{
+    const QString path = QFileDialog::getOpenFileName(dialogParent(),
+                                                      tr("Set Avatar"),
+                                                      QString(),
+                                                      tr("Images (*.png *.jpg *.jpeg *.bmp)"));
+    if (path.isEmpty()) {
+        return;
+    }
+
+    if (isInternetMode()) {
+        QImage image(path);
+        if (image.isNull()) {
+            statusBar()->showMessage(tr("Could not load that avatar image."), 7000);
+            return;
+        }
+        const int squareSize = qMin(image.width(), image.height());
+        const QRect cropRect((image.width() - squareSize) / 2, (image.height() - squareSize) / 2, squareSize, squareSize);
+        image = image.copy(cropRect).scaled(96, 96, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        QByteArray bytes;
+        QBuffer buffer(&bytes);
+        buffer.open(QIODevice::WriteOnly);
+        image.save(&buffer, "PNG");
+        m_internetAvatarData = bytes;
+        QSettings settings(QStringLiteral("Exe Innovate"), QStringLiteral("Blinq Messenger"));
+        settings.setValue(QStringLiteral("internet/avatar"), m_internetAvatarData);
+        QSettings themeSettings(QStringLiteral("Exe Innovate"), QStringLiteral("Blinq Messenger"));
+        const QString themeKey = themeSettings.value(QStringLiteral("app/themeName"), QStringLiteral("msnBlue")).toString();
+        m_internetRelay->setProfile(m_settings.internetDisplayName, bytes, appThemeForKey(themeKey).accent);
+        updateLocalProfile();
+        return;
+    }
+
+    m_chatService->setLocalAvatar(path);
+    updateLocalProfile();
+}
+
 void MainWindow::updatePublicChatParticipants()
 {
     if (m_publicChatWindow) {
@@ -2597,11 +3055,29 @@ void MainWindow::rebuildInternetContacts()
         return;
     }
 
+    QSet<QString> previousPeerIds;
+    for (auto it = m_internetPeers.constBegin(); it != m_internetPeers.constEnd(); ++it) {
+        previousPeerIds.insert(it.key());
+    }
+    QSet<QString> currentPeerIds;
     m_peers.clear();
     m_knownPeers.clear();
     m_internetPeers.clear();
     for (const InternetRelayPeer &internetPeer : m_internetRelay->contacts()) {
+        currentPeerIds.insert(internetPeer.id);
         upsertInternetPeer(internetPeer);
+    }
+    for (const QString &removedPeerId : previousPeerIds) {
+        if (currentPeerIds.contains(removedPeerId)) {
+            continue;
+        }
+        m_favoritePeers.remove(removedPeerId);
+        m_peerGroups.remove(removedPeerId);
+        clearUnreadForPeer(removedPeerId);
+        if (auto *window = m_chatWindows.take(removedPeerId)) {
+            window->close();
+            window->deleteLater();
+        }
     }
     rebuildContactList();
     updateEmptyContactsLabel();
@@ -2647,7 +3123,10 @@ ChatPeer MainWindow::chatPeerFromInternetPeer(const InternetRelayPeer &internetP
                                : (internetPeer.personalMessage.isEmpty() ? internetPeer.blinqId : internetPeer.personalMessage);
     peer.themeColor = internetPeer.themeColor;
     peer.avatarData = QByteArray::fromBase64(internetPeer.avatar.toLatin1());
-    peer.lastSeen = QDateTime::currentDateTimeUtc();
+    peer.lastSeen = QDateTime::fromString(internetPeer.lastSeenAt, Qt::ISODate);
+    if (!peer.lastSeen.isValid() && peer.status != tr("Offline")) {
+        peer.lastSeen = QDateTime::currentDateTimeUtc();
+    }
     peer.protocolVersion = 100;
     peer.publicChatOpen = false;
     return peer;
@@ -3021,7 +3500,7 @@ void MainWindow::showDirectConnectDialog()
     auto *label = new QLabel(tr("Enter an IPv4 address, IP:port, or paste a Blinq connection invite."), dialog);
     auto *addressEdit = new QComboBox(dialog);
     addressEdit->setEditable(true);
-    QSettings themeSettings(QStringLiteral("LANChat"), QStringLiteral("LANChat"));
+    QSettings themeSettings(QStringLiteral("Exe Innovate"), QStringLiteral("Blinq Messenger"));
     const AppTheme theme = appThemeForKey(themeSettings.value(QStringLiteral("app/themeName"), QStringLiteral("msnBlue")).toString());
     if (QLineEdit *lineEdit = addressEdit->lineEdit()) {
         QPalette palette = lineEdit->palette();
@@ -3129,6 +3608,63 @@ void MainWindow::showFirewallHelperDialog()
     dialog.exec();
 }
 
+void MainWindow::refreshConnection()
+{
+    if (!allowRateLimitedAction(QStringLiteral("refresh-connection"), 3000)) {
+        statusBar()->showMessage(tr("Connection refresh is already in progress."), 3000);
+        return;
+    }
+
+    m_typingPeers.clear();
+    m_isLoading = true;
+    updateEmptyContactsLabel();
+
+    if (isInternetMode()) {
+        m_refreshingConnection = true;
+        statusBar()->showMessage(tr("Refreshing Internet connection..."), 7000);
+        updateNetworkStatus();
+        m_internetRelay->connectToServer(m_settings.internetServerHost,
+                                         static_cast<quint16>(m_settings.internetServerPort));
+        if (!m_settings.internetAuthToken.isEmpty()) {
+            m_internetRelay->resume(m_settings.internetAuthToken);
+        } else {
+            m_refreshingConnection = false;
+            showInternetSignInDialog();
+        }
+        QTimer::singleShot(12000, this, [this] {
+            if (!m_refreshingConnection) {
+                return;
+            }
+            m_refreshingConnection = false;
+            m_isLoading = false;
+            if (!m_internetRelay->isAuthenticated()) {
+                statusBar()->showMessage(tr("Internet connection refresh did not complete."), 7000);
+            }
+            updateEmptyContactsLabel();
+            updateNetworkStatus();
+        });
+        return;
+    }
+
+    statusBar()->showMessage(tr("Refreshing LAN connection..."), 6000);
+    m_chatService->refreshConnection();
+    updateNetworkStatus();
+    const QStringList addresses = rememberedPeerAddresses();
+    if (!addresses.isEmpty()) {
+        QTimer::singleShot(1200, this, [this, addresses] {
+            startBackgroundConnectionAttempts(addresses,
+                                              tr("Checking saved contact address(es)..."),
+                                              false);
+        });
+    }
+    QTimer::singleShot(1500, this, [this] {
+        m_isLoading = false;
+        updateEmptyContactsLabel();
+        updateNetworkStatus();
+        statusBar()->showMessage(tr("LAN connection refreshed."), 5000);
+    });
+}
+
 void MainWindow::reconnectSavedContacts()
 {
     const QStringList addresses = rememberedPeerAddresses();
@@ -3225,6 +3761,10 @@ void MainWindow::showSettings()
     connect(&dialog, &SettingsDialog::changeBlinqPasswordRequested, this, [this, &dialog] {
         dialog.reject();
         changeBlinqPassword();
+    });
+    connect(&dialog, &SettingsDialog::signOutBlinqAccountRequested, this, [this, &dialog] {
+        dialog.reject();
+        signOutBlinqAccount();
     });
     connect(&dialog, &SettingsDialog::backupDataRequested, this, [this, &dialog] {
         backupAppData();
@@ -3506,7 +4046,7 @@ void MainWindow::showGroupManager()
 
 void MainWindow::resetAppSettings()
 {
-    QSettings settings(QStringLiteral("LANChat"), QStringLiteral("LANChat"));
+    QSettings settings(QStringLiteral("Exe Innovate"), QStringLiteral("Blinq Messenger"));
     settings.clear();
     settings.sync();
 
@@ -3641,10 +4181,15 @@ void MainWindow::restoreAppData()
     restartApplication();
 }
 
+bool MainWindow::shouldShowWelcomeDialog() const
+{
+    QSettings settings(QStringLiteral("Exe Innovate"), QStringLiteral("Blinq Messenger"));
+    return !settings.value(QStringLiteral("app/welcomeShown"), false).toBool();
+}
+
 void MainWindow::showWelcomeDialog()
 {
-    QSettings settings(QStringLiteral("LANChat"), QStringLiteral("LANChat"));
-    if (settings.value(QStringLiteral("app/welcomeShown"), false).toBool() || !isVisible()) {
+    if (!shouldShowWelcomeDialog()) {
         return;
     }
 
@@ -3663,10 +4208,11 @@ void MainWindow::showWelcomeDialog()
          tr("Set your name, avatar, status, personal message, theme, notifications, privacy options, and history preferences from the menus and Settings.")}
     };
 
-    QDialog dialog(dialogParent());
+    QDialog dialog(isVisible() ? dialogParent() : nullptr);
     dialog.setWindowTitle(tr("Welcome"));
     dialog.setModal(true);
     dialog.setFixedSize(520, 360);
+    dialog.setWindowFlag(Qt::WindowCloseButtonHint, false);
     dialog.setStyleSheet(appStyleSheet()
                          + QStringLiteral(
                                "QLabel#WelcomeTitle { font-size:24px; font-weight:850; color:#0f172a; background:transparent; }"
@@ -3742,6 +4288,7 @@ void MainWindow::showWelcomeDialog()
             return;
         }
 
+        QSettings settings(QStringLiteral("Exe Innovate"), QStringLiteral("Blinq Messenger"));
         settings.setValue(QStringLiteral("app/welcomeShown"), true);
         settings.sync();
         dialog.accept();
@@ -3881,6 +4428,197 @@ void MainWindow::showHelp()
 {
     const QString helpPath = QCoreApplication::applicationDirPath() + QStringLiteral("/help.html");
     QDesktopServices::openUrl(QUrl::fromLocalFile(helpPath));
+}
+
+void MainWindow::showFeedbackDialog()
+{
+    if (!isInternetMode() || !m_internetRelay->isAuthenticated()) {
+        QMessageBox::information(dialogParent(),
+                                 tr("Send Feedback"),
+                                 tr("Please sign in to Internet Mode before sending feedback."));
+        return;
+    }
+
+    QDialog dialog(dialogParent());
+    dialog.setWindowTitle(tr("Send Feedback"));
+    dialog.resize(520, 460);
+    dialog.setStyleSheet(appStyleSheet());
+
+    auto *layout = new QVBoxLayout(&dialog);
+    layout->setContentsMargins(18, 18, 18, 16);
+    layout->setSpacing(10);
+
+    auto *title = new QLabel(tr("Send Feedback"), &dialog);
+    title->setStyleSheet(QStringLiteral("font-size:18px; font-weight:800; color:#0f172a; background:transparent;"));
+    layout->addWidget(title);
+
+    auto *intro = new QLabel(tr("Report a bug, share an idea, or send anything that helps improve Blinq Messenger."), &dialog);
+    intro->setWordWrap(true);
+    intro->setStyleSheet(QStringLiteral("color:#475569; background:transparent;"));
+    layout->addWidget(intro);
+
+    auto *form = new QFormLayout();
+    form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+
+    auto *category = new QComboBox(&dialog);
+    category->addItems({tr("Bug report"), tr("Suggestion"), tr("Other")});
+    form->addRow(tr("Type"), category);
+
+    auto *contactEmail = new QLineEdit(&dialog);
+    contactEmail->setPlaceholderText(tr("Optional"));
+    form->addRow(tr("Contact email"), contactEmail);
+    layout->addLayout(form);
+
+    auto *message = new QTextEdit(&dialog);
+    message->setPlaceholderText(tr("Write your feedback here..."));
+    message->setMinimumHeight(150);
+    layout->addWidget(message, 1);
+
+    auto *includeDebug = new QCheckBox(tr("Include basic debug info"), &dialog);
+    includeDebug->setChecked(true);
+    layout->addWidget(includeDebug);
+
+    auto *status = new QLabel(&dialog);
+    status->setWordWrap(true);
+    status->setStyleSheet(QStringLiteral("color:#64748b; background:transparent;"));
+    layout->addWidget(status);
+
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Cancel, &dialog);
+    auto *sendButton = buttons->addButton(tr("Send"), QDialogButtonBox::AcceptRole);
+    layout->addWidget(buttons);
+
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+    QMetaObject::Connection sentConnection;
+    QMetaObject::Connection errorConnection;
+    sentConnection = connect(m_internetRelay, &InternetRelayService::feedbackSent, &dialog, [&] {
+        QObject::disconnect(sentConnection);
+        QObject::disconnect(errorConnection);
+        QMessageBox::information(&dialog, tr("Feedback Sent"), tr("Thanks. Your feedback was sent."));
+        dialog.accept();
+    });
+    errorConnection = connect(m_internetRelay, &InternetRelayService::errorOccurred, &dialog, [&](const QString &error) {
+        sendButton->setEnabled(true);
+        status->setText(error);
+    });
+
+    connect(sendButton, &QPushButton::clicked, &dialog, [&] {
+        const QString body = message->toPlainText().trimmed();
+        const QString email = contactEmail->text().trimmed();
+        if (body.size() < 10) {
+            status->setText(tr("Please enter a little more detail."));
+            return;
+        }
+        if (body.size() > 4000) {
+            status->setText(tr("Feedback must be 4000 characters or less."));
+            return;
+        }
+        if (!email.isEmpty()) {
+            static const QRegularExpression emailPattern(QStringLiteral("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"));
+            if (!emailPattern.match(email).hasMatch()) {
+                status->setText(tr("Enter a valid contact email address."));
+                return;
+            }
+        }
+
+        QStringList debug;
+        if (includeDebug->isChecked()) {
+            debug << tr("Application: %1").arg(QCoreApplication::applicationName());
+            debug << tr("Version: %1").arg(QCoreApplication::applicationVersion());
+            debug << tr("Qt version: %1").arg(QString::fromLatin1(qVersion()));
+            debug << tr("Mode: %1").arg(isInternetMode() ? tr("Internet Mode") : tr("LAN Mode"));
+            debug << tr("Blinq ID: %1").arg(m_settings.internetBlinqId);
+            debug << tr("Server state: %1").arg(m_internetRelay->isAuthenticated() ? tr("authenticated") : tr("not authenticated"));
+            debug << tr("Build date: %1 %2").arg(QStringLiteral(__DATE__), QStringLiteral(__TIME__));
+        }
+
+        sendButton->setEnabled(false);
+        status->setText(tr("Sending feedback..."));
+        m_internetRelay->sendFeedback(category->currentText(),
+                                      body,
+                                      email,
+                                      QStringLiteral("Windows"),
+                                      debug.join(QLatin1Char('\n')));
+    });
+
+    dialog.exec();
+}
+
+void MainWindow::showDonateDialog()
+{
+    QDialog dialog(dialogParent());
+    dialog.setWindowTitle(tr("Support Blinq Messenger"));
+    dialog.setFixedSize(480, 330);
+    dialog.setStyleSheet(appStyleSheet()
+                         + QStringLiteral(
+                               "QWidget#DonateHeader { background:transparent; border:none; }"
+                               "QLabel#DonateTitle { font-size:22px; font-weight:850; color:#0f172a; background:transparent; }"
+                               "QLabel#DonateSubtitle { color:#475569; font-weight:600; background:transparent; }"
+                               "QLabel#DonateBody { color:#334155; font-size:10.5pt; background:transparent; }"
+                               "QFrame#DonatePanel { background:#ffffff; border:1px solid #cbd5e1; border-radius:12px; }"
+                               "QPushButton#DonateButton { padding:9px 16px; font-weight:800; }"));
+
+    auto *layout = new QVBoxLayout(&dialog);
+    layout->setContentsMargins(18, 18, 18, 16);
+    layout->setSpacing(12);
+
+    auto *header = new QWidget(&dialog);
+    header->setObjectName(QStringLiteral("DonateHeader"));
+    auto *headerLayout = new QHBoxLayout(header);
+    headerLayout->setContentsMargins(0, 0, 0, 0);
+    headerLayout->setSpacing(12);
+
+    auto *icon = new QLabel(header);
+    icon->setPixmap(QIcon(QStringLiteral(":/icons/assets/appicon.ico")).pixmap(54, 54));
+    icon->setFixedSize(58, 58);
+    icon->setAlignment(Qt::AlignCenter);
+    headerLayout->addWidget(icon);
+
+    auto *titleBlock = new QWidget(header);
+    auto *titleLayout = new QVBoxLayout(titleBlock);
+    titleLayout->setContentsMargins(0, 0, 0, 0);
+    titleLayout->setSpacing(3);
+    auto *title = new QLabel(tr("Support Blinq Messenger"), titleBlock);
+    title->setObjectName(QStringLiteral("DonateTitle"));
+    auto *subtitle = new QLabel(tr("Optional support for the Internet service"), titleBlock);
+    subtitle->setObjectName(QStringLiteral("DonateSubtitle"));
+    titleLayout->addWidget(title);
+    titleLayout->addWidget(subtitle);
+    headerLayout->addWidget(titleBlock, 1);
+    layout->addWidget(header);
+
+    auto *panel = new QFrame(&dialog);
+    panel->setObjectName(QStringLiteral("DonatePanel"));
+    auto *panelLayout = new QVBoxLayout(panel);
+    panelLayout->setContentsMargins(16, 14, 16, 14);
+    panelLayout->setSpacing(10);
+
+    auto *body = new QLabel(tr(
+                                "Blinq Messenger is free to use, and LAN Mode works without a central chat server. "
+                                "Internet Mode depends on hosted services that have ongoing costs.\n\n"
+                                "If Blinq Messenger is useful to you, a voluntary donation helps keep the Internet service online and available. "
+                                "Donating is optional and never required to use the app."),
+                            panel);
+    body->setObjectName(QStringLiteral("DonateBody"));
+    body->setWordWrap(true);
+    panelLayout->addWidget(body);
+    layout->addWidget(panel, 1);
+
+    auto *buttonRow = new QHBoxLayout();
+    auto *koFiButton = new QPushButton(tr("Donate Now"), &dialog);
+    koFiButton->setObjectName(QStringLiteral("DonateButton"));
+    koFiButton->setIcon(QIcon(QStringLiteral(":/icons/assets/favorite.png")));
+    connect(koFiButton, &QPushButton::clicked, this, [] {
+        QDesktopServices::openUrl(QUrl(QStringLiteral("https://ko-fi.com/exeinn")));
+    });
+    auto *closeButton = new QPushButton(tr("Close"), &dialog);
+    connect(closeButton, &QPushButton::clicked, &dialog, &QDialog::accept);
+    buttonRow->addWidget(koFiButton);
+    buttonRow->addStretch(1);
+    buttonRow->addWidget(closeButton);
+    layout->addLayout(buttonRow);
+
+    dialog.exec();
 }
 
 void MainWindow::showUpdateDialog()
@@ -4161,7 +4899,7 @@ void MainWindow::updateNetworkStatus()
                                     : tr("Local discovery is not bound."));
 }
 
-bool MainWindow::showIncomingNotification(const ChatPeer &peer, const QString &message)
+bool MainWindow::showIncomingNotification(const ChatPeer &peer, const QString &message, const QString &senderName)
 {
     if (!m_settings.showNotifications || !m_settings.directMessageNotifications) {
         return false;
@@ -4170,23 +4908,36 @@ bool MainWindow::showIncomingNotification(const ChatPeer &peer, const QString &m
     m_pendingNotificationPeerId = peer.id;
     m_pendingNotificationAction = QStringLiteral("openChat");
     m_pendingNotificationIsPublic = false;
-    showNativeNotification(tr("Blinq Messenger"),
+    const QString title = senderName.trimmed().isEmpty()
+                              ? (peer.name.isEmpty() ? tr("Blinq Messenger") : peer.name)
+                              : senderName.trimmed();
+    showNativeNotification(title,
                            message,
-                           avatarIcon(peer.avatarData, peer.name));
+                           avatarIcon(peer.avatarData, title));
     return true;
 }
 
-bool MainWindow::showPublicIncomingNotification(const QString &sender, const QString &message)
+bool MainWindow::showPublicIncomingNotification()
 {
     if (!m_settings.showNotifications || !m_settings.publicChatNotifications) {
+        return false;
+    }
+    const QDateTime now = QDateTime::currentDateTimeUtc();
+    if (!m_publicChatUnattendedSince.isValid()
+        || m_publicChatUnattendedSince.msecsTo(now) < PublicChatUnattendedDelayMs) {
+        return false;
+    }
+    if (m_lastPublicChatNotificationAt.isValid()
+        && m_lastPublicChatNotificationAt.msecsTo(now) < PublicChatNotificationCooldownMs) {
         return false;
     }
 
     m_pendingNotificationPeerId.clear();
     m_pendingNotificationAction = QStringLiteral("openPublic");
     m_pendingNotificationIsPublic = true;
+    m_lastPublicChatNotificationAt = now;
     showNativeNotification(tr("Blinq Messenger"),
-                           message,
+                           tr("New messages in Public Chat"),
                            windowIcon());
     return true;
 }
@@ -4223,6 +4974,23 @@ void MainWindow::markChatActive()
 void MainWindow::markChatIdle()
 {
     m_chatService->setLocalIdle(true);
+}
+
+bool MainWindow::clearUnreadForPeer(const QString &peerId)
+{
+    if (peerId.isEmpty()) {
+        return false;
+    }
+
+    auto unreadCounts = property("unreadCounts").toHash();
+    if (unreadCounts.value(peerId).toInt() <= 0) {
+        return false;
+    }
+
+    unreadCounts.remove(peerId);
+    setProperty("unreadCounts", unreadCounts);
+    rebuildContactList();
+    return true;
 }
 
 void MainWindow::updateTrayTooltip()
@@ -4559,11 +5327,40 @@ void MainWindow::setSoundsMuted(bool muted)
 
 void MainWindow::showFromTray()
 {
+    if (shouldShowWelcomeDialog()) {
+        showWelcomeDialog();
+    }
     showNormal();
+    positionAtBottomRight();
     raise();
     activateWindow();
     setFocus();
-    QTimer::singleShot(250, this, &MainWindow::showWelcomeDialog);
+    startConnectionServices();
+}
+
+void MainWindow::positionAtBottomRight()
+{
+    QScreen *targetScreen = screen();
+    if (!targetScreen) {
+        targetScreen = QApplication::primaryScreen();
+    }
+    if (!targetScreen) {
+        return;
+    }
+
+    const QRect available = targetScreen->availableGeometry();
+    QSize windowSize = frameGeometry().size();
+    if (!windowSize.isValid() || windowSize.isEmpty()) {
+        windowSize = size();
+    }
+    if (!windowSize.isValid() || windowSize.isEmpty()) {
+        windowSize = sizeHint();
+    }
+
+    constexpr int margin = 12;
+    const int x = available.right() - windowSize.width() + 1 - margin;
+    const int y = available.bottom() - windowSize.height() + 1 - margin;
+    move(qMax(available.left() + margin, x), qMax(available.top() + margin, y));
 }
 
 void MainWindow::clearSelectedHistory()
@@ -4573,14 +5370,59 @@ void MainWindow::clearSelectedHistory()
         return;
     }
 
-    if (QMessageBox::question(dialogParent(), tr("Clear Chat"), 
-        tr("Are you sure you want to permanently clear the chat history with this contact?")) != QMessageBox::Yes) {
+    if (QMessageBox::question(dialogParent(),
+                              tr("Delete Chat"),
+                              tr("Delete this chat?"),
+                              QMessageBox::Yes | QMessageBox::No,
+                              QMessageBox::No)
+        != QMessageBox::Yes) {
         return;
     }
 
     auto *window = chatWindowFor(peerId);
     window->clearHistory();
-    statusBar()->showMessage(tr("Chat history cleared."), 5000);
+    statusBar()->showMessage(tr("Chat deleted."), 5000);
+}
+
+void MainWindow::deleteSelectedInternetContact()
+{
+    const QString peerId = selectedPeerId();
+    if (peerId.isEmpty() || !isInternetPeer(peerId)) {
+        return;
+    }
+
+    const ChatPeer peer = m_knownPeers.value(peerId, m_peers.value(peerId));
+    const QString peerName = peer.name.isEmpty() ? tr("this contact") : peer.name;
+    if (QMessageBox::question(dialogParent(),
+                              tr("Delete Contact"),
+                              tr("Delete %1 and your chat with them?").arg(peerName),
+                              QMessageBox::Yes | QMessageBox::No,
+                              QMessageBox::No)
+        != QMessageBox::Yes) {
+        return;
+    }
+
+    m_internetRelay->removeContact(peerId);
+    ChatWindow *window = m_chatWindows.value(peerId, nullptr);
+    if (!window) {
+        window = chatWindowFor(peerId);
+    }
+    window->clearHistory();
+    m_peers.remove(peerId);
+    m_knownPeers.remove(peerId);
+    m_internetPeers.remove(peerId);
+    m_favoritePeers.remove(peerId);
+    m_peerGroups.remove(peerId);
+    clearUnreadForPeer(peerId);
+    if (auto *removedWindow = m_chatWindows.take(peerId)) {
+        removedWindow->close();
+        removedWindow->deleteLater();
+    }
+    rebuildContactList();
+    updateContactsLabel();
+    updateEmptyContactsLabel();
+    saveSettings();
+    statusBar()->showMessage(tr("Contact deleted."), 5000);
 }
 
 void MainWindow::blockSelectedPeer()
@@ -5162,7 +6004,8 @@ void MainWindow::showPeerContextMenu(const QPoint &position)
         });
         menu.addAction(QIcon(QStringLiteral(":/icons/assets/whistle.png")), tr("Whistle"), this, &MainWindow::buzzSelectedPeer);
         menu.addSeparator();
-        menu.addAction(QIcon(QStringLiteral(":/icons/assets/clear_history.png")), tr("Clear Chat History"), this, &MainWindow::clearSelectedHistory);
+        menu.addAction(QIcon(QStringLiteral(":/icons/assets/clear_history.png")), tr("Delete Chat"), this, &MainWindow::clearSelectedHistory);
+        menu.addAction(QIcon(QStringLiteral(":/icons/assets/clear_history.png")), tr("Delete Contact"), this, &MainWindow::deleteSelectedInternetContact);
         menu.addSeparator();
         if (m_blockedPeers.contains(peerId)) {
             menu.addAction(QIcon(QStringLiteral(":/icons/assets/block_user.png")), tr("Unblock User"), this, &MainWindow::unblockSelectedPeer);
@@ -5218,16 +6061,19 @@ void MainWindow::showPeerContextMenu(const QPoint &position)
 
     auto *moveMenu = menu.addMenu(tr("Move to Group"));
     moveMenu->menuAction()->setIconVisibleInMenu(true);
+    QSettings groupThemeSettings(QStringLiteral("Exe Innovate"), QStringLiteral("Blinq Messenger"));
+    const AppTheme groupTheme = appThemeForKey(groupThemeSettings.value(QStringLiteral("app/themeName"), QStringLiteral("msnBlue")).toString());
+    const QIcon selectedGroupIcon = menuCheckIcon(groupTheme.accent);
     for (const QString &groupName : std::as_const(m_customContactGroups)) {
-        auto *groupAction = moveMenu->addAction(groupName, this, [this, peerId, groupName] {
+        const bool selectedGroup = m_peerGroups.value(peerId) == groupName;
+        auto *groupAction = moveMenu->addAction(selectedGroup ? selectedGroupIcon : QIcon(), groupName, this, [this, peerId, groupName] {
             if (!peerId.isEmpty()) {
                 m_peerGroups.insert(peerId, groupName);
                 rebuildContactList();
                 saveSettings();
             }
         });
-        groupAction->setCheckable(true);
-        groupAction->setChecked(m_peerGroups.value(peerId) == groupName);
+        groupAction->setIconVisibleInMenu(selectedGroup);
     }
     if (!m_customContactGroups.isEmpty()) {
         moveMenu->addSeparator();
@@ -5318,7 +6164,7 @@ void MainWindow::showContactInfo(const QString &peerId)
 
     QMessageBox box(dialogParent());
     box.setWindowTitle(tr("Contact Info"));
-    QSettings themeSettings(QStringLiteral("LANChat"), QStringLiteral("LANChat"));
+    QSettings themeSettings(QStringLiteral("Exe Innovate"), QStringLiteral("Blinq Messenger"));
     const QColor localFrameColor(appThemeForKey(themeSettings.value(QStringLiteral("app/themeName"), QStringLiteral("msnBlue")).toString()).accent);
     const QColor peerFrameColor(peer.themeColor);
     box.setIconPixmap(avatarPixmapWithStatus(peer.avatarData, name, peer.status, 64, peerFrameColor.isValid() ? peerFrameColor : localFrameColor));
@@ -5335,14 +6181,17 @@ void MainWindow::updateLocalProfile()
         const QString displayName = !m_settings.internetDisplayName.isEmpty()
                                         ? m_settings.internetDisplayName
                                         : (self.displayName.isEmpty() ? m_settings.internetBlinqId : self.displayName);
-        const QByteArray avatarData = QByteArray::fromBase64(self.avatar.toLatin1());
+        const QByteArray serverAvatarData = QByteArray::fromBase64(self.avatar.toLatin1());
+        const QByteArray avatarData = serverAvatarData.isEmpty() ? m_internetAvatarData : serverAvatarData;
         m_localName->setText(displayName.isEmpty() ? tr("Blinq Messenger") : displayName);
         if (auto *pmEdit = findChild<QLineEdit*>(QStringLiteral("LocalPersonalMessageEdit"))) {
             pmEdit->setText(m_manualPersonalMessage);
         }
-        const QIcon icon = avatarIcon(avatarData, displayName);
+        QSettings themeSettings(QStringLiteral("Exe Innovate"), QStringLiteral("Blinq Messenger"));
+        const QColor localFrameColor(appThemeForKey(themeSettings.value(QStringLiteral("app/themeName"), QStringLiteral("msnBlue")).toString()).accent);
+        const QIcon icon(avatarPixmap(avatarData, displayName, 56, localFrameColor));
         m_localAvatar->setFixedSize(64, 64);
-        m_localAvatar->setPixmap(avatarPixmap(avatarData, displayName, 58));
+        m_localAvatar->setPixmap(avatarPixmap(avatarData, displayName, 64, localFrameColor));
         if (m_trayIcon) {
             m_trayIcon->setIcon(icon);
             updateTrayTooltip();
@@ -5370,9 +6219,11 @@ void MainWindow::updateLocalProfile()
             pmEdit->setText(m_manualPersonalMessage);
         }
     }
-    const QIcon icon = avatarIcon(m_chatService->localAvatarData(), m_chatService->localName());
+    QSettings themeSettings(QStringLiteral("Exe Innovate"), QStringLiteral("Blinq Messenger"));
+    const QColor localFrameColor(appThemeForKey(themeSettings.value(QStringLiteral("app/themeName"), QStringLiteral("msnBlue")).toString()).accent);
+    const QIcon icon(avatarPixmap(m_chatService->localAvatarData(), m_chatService->localName(), 56, localFrameColor));
     m_localAvatar->setFixedSize(64, 64);
-    m_localAvatar->setPixmap(avatarPixmap(m_chatService->localAvatarData(), m_chatService->localName(), 58));
+    m_localAvatar->setPixmap(avatarPixmap(m_chatService->localAvatarData(), m_chatService->localName(), 64, localFrameColor));
     if (m_trayIcon) {
         m_trayIcon->setIcon(icon);
         updateTrayTooltip();
@@ -5391,14 +6242,13 @@ QPixmap MainWindow::avatarPixmap(const QByteArray &avatarData, const QString &fa
         pixmap.loadFromData(avatarData);
     }
     if (pixmap.isNull()) {
+        pixmap.load(QStringLiteral(":/icons/assets/avatar_placeholder.png"));
+    }
+    if (pixmap.isNull()) {
         pixmap = QPixmap(size, size);
         pixmap.fill(QColor(QStringLiteral("#e0f2fe")));
-        QPainter painter(&pixmap);
-        painter.setRenderHint(QPainter::Antialiasing);
-        painter.setPen(QColor(QStringLiteral("#075985")));
-        painter.setFont(QFont(QStringLiteral("Segoe UI"), qMax(12, size / 3), QFont::Bold));
-        painter.drawText(pixmap.rect(), Qt::AlignCenter, fallbackText.left(1).toUpper());
     }
+    Q_UNUSED(fallbackText);
 
     if (pixmap.width() != pixmap.height()) {
         const int squareSize = qMin(pixmap.width(), pixmap.height());
@@ -5481,7 +6331,7 @@ QWidget *MainWindow::createPeerRow(const ChatPeer &peer)
 
     auto *avatar = new QLabel(row);
     avatar->setFixedSize(48, 48);
-    QSettings themeSettings(QStringLiteral("LANChat"), QStringLiteral("LANChat"));
+    QSettings themeSettings(QStringLiteral("Exe Innovate"), QStringLiteral("Blinq Messenger"));
     const QColor localFrameColor(appThemeForKey(themeSettings.value(QStringLiteral("app/themeName"), QStringLiteral("msnBlue")).toString()).accent);
     const QColor peerFrameColor(peer.themeColor);
     const QColor avatarFrameColor = peerFrameColor.isValid() ? peerFrameColor : localFrameColor;
@@ -5636,7 +6486,7 @@ ChatWindow *MainWindow::chatWindowFor(const QString &peerId)
     window->setHistoryEnabled(m_settings.saveHistory);
     window->setImageAttachmentsOnly(isInternetPeer(peerId));
     window->setQueuedMessageCount(m_offlineMessages.value(peerId).size());
-    QSettings themeSettings(QStringLiteral("LANChat"), QStringLiteral("LANChat"));
+    QSettings themeSettings(QStringLiteral("Exe Innovate"), QStringLiteral("Blinq Messenger"));
     window->setLocalAccentColor(QColor(appThemeForKey(themeSettings.value(QStringLiteral("app/themeName"), QStringLiteral("msnBlue")).toString()).accent));
     m_chatWindows.insert(peerId, window);
     connect(window, &QObject::destroyed, this, [this, peerId] {
@@ -5647,19 +6497,7 @@ ChatWindow *MainWindow::chatWindowFor(const QString &peerId)
     connect(window, &ChatWindow::becameActive, this, [this, peerId] {
         markChatActive();
         sendPendingReadReceipts(peerId);
-        
-        auto unreadCounts = property("unreadCounts").toHash();
-        if (unreadCounts.value(peerId).toInt() > 0) {
-            unreadCounts.remove(peerId);
-            setProperty("unreadCounts", unreadCounts);
-            if (m_peers.contains(peerId)) {
-                if (isInternetPeer(peerId)) {
-                    rebuildContactList();
-                } else {
-                    upsertPeer(m_peers.value(peerId));
-                }
-            }
-        }
+        clearUnreadForPeer(peerId);
     });
     connect(window, &ChatWindow::typingStateChanged, this, [this](const QString &requestedPeerId, bool isTyping) {
         if (isTyping) {
@@ -5681,11 +6519,6 @@ ChatWindow *MainWindow::chatWindowFor(const QString &peerId)
             if (!m_internetRelay->isAuthenticated()) {
                 window->appendSystemMessage(tr("Sign in to Internet Mode before sending messages."));
                 showInternetSignInDialog();
-                return;
-            }
-            if (!m_peers.contains(requestedPeerId)) {
-                const QString name = peer.name.isEmpty() ? tr("This contact") : peer.name;
-                window->appendSystemMessage(tr("%1 is offline. Internet offline message sync is not enabled yet.").arg(name));
                 return;
             }
             m_internetRelay->sendMessage(requestedPeerId, message, isHtml);

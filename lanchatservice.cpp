@@ -33,7 +33,7 @@ namespace {
 constexpr qint64 MaxTransferBytes = 250 * 1024 * 1024;
 constexpr int SendTimeoutMs = 6000;
 constexpr int ProtocolVersion = 3;
-const QByteArray MessageEncryptionKey = QByteArrayLiteral("LANChat-v1-local-message-key");
+const QByteArray MessageEncryptionKey = QByteArrayLiteral("BlinqMessenger-v1-local-message-key");
 
 struct IncomingTransfer {
     QString senderId;
@@ -401,6 +401,32 @@ void LanChatService::start()
     sendPresence();
 }
 
+void LanChatService::refreshConnection()
+{
+    m_presenceTimer.stop();
+    m_pruneTimer.stop();
+    sendPresenceMessage(QStringLiteral("bye"));
+
+    if (m_udpSocket) {
+        m_udpSocket->close();
+    }
+    if (m_tcpServer) {
+        m_tcpServer->close();
+    }
+
+    const QStringList peerIds = m_peers.keys();
+    m_peers.clear();
+    for (const QString &peerId : peerIds) {
+        emit peerLeft(peerId, false);
+    }
+
+    m_discoveryAvailable = false;
+    m_discoveryError.clear();
+    m_usingFallbackDirectTcpPort = false;
+    m_pendingManualConnectionHosts.clear();
+    start();
+}
+
 void LanChatService::connectToAddress(const QString &address)
 {
     QString input = address.trimmed();
@@ -510,11 +536,14 @@ void LanChatService::setLocalStatus(const QString &status)
     m_localStatus = status;
     saveSettings();
     if (m_localStatus == tr("Invisible")) {
+        sendDirectPresenceBye();
         sendPresenceMessage(QStringLiteral("bye"));
     } else if (wasInvisible) {
         sendPresenceMessage(QStringLiteral("hello"));
+        sendDirectPresenceUpdate(true);
     } else {
         sendPresence();
+        sendDirectPresenceUpdate();
     }
 }
 
@@ -527,6 +556,7 @@ void LanChatService::setLocalPersonalMessage(const QString &message)
     m_localPersonalMessage = message;
     saveSettings();
     sendPresence();
+    sendDirectPresenceUpdate();
 }
 
 void LanChatService::setLocalThemeColor(const QString &color)
@@ -537,6 +567,7 @@ void LanChatService::setLocalThemeColor(const QString &color)
 
     m_localThemeColor = color;
     sendPresence();
+    sendDirectPresenceUpdate();
 }
 
 void LanChatService::setLocalIdle(bool idle)
@@ -547,6 +578,7 @@ void LanChatService::setLocalIdle(bool idle)
 
     m_localIdle = idle;
     sendPresence();
+    sendDirectPresenceUpdate();
 }
 
 void LanChatService::setPublicChatOpen(bool open)
@@ -557,6 +589,7 @@ void LanChatService::setPublicChatOpen(bool open)
 
     m_publicChatOpen = open;
     sendPresence();
+    sendDirectPresenceUpdate();
 }
 
 void LanChatService::setLocalName(const QString &name)
@@ -569,6 +602,7 @@ void LanChatService::setLocalName(const QString &name)
     m_localName = trimmed;
     saveSettings();
     sendPresence();
+    sendDirectPresenceUpdate();
 }
 
 void LanChatService::setLocalAvatar(const QString &filePath)
@@ -589,6 +623,7 @@ void LanChatService::setLocalAvatar(const QString &filePath)
     m_localAvatarData = bytes;
     saveSettings();
     sendPresence();
+    sendDirectPresenceUpdate(true);
 }
 
 void LanChatService::sendMessage(const QString &peerId, const QString &message, bool isHtml)
@@ -1126,7 +1161,64 @@ void LanChatService::handleChatSocket(QTcpSocket *socket)
         && type != QStringLiteral("privateChatReject")
         && type != QStringLiteral("manualHello")
         && type != QStringLiteral("manualHelloAck")
+        && type != QStringLiteral("presenceUpdate")
+        && type != QStringLiteral("presenceBye")
         && type != QStringLiteral("cancelTransfer")) {
+        return;
+    }
+
+    if (type == QStringLiteral("presenceBye")) {
+        const QString peerId = payload.value(QStringLiteral("id")).toString();
+        if (!peerId.isEmpty() && peerId != m_localId && m_peers.remove(peerId) > 0) {
+            emit peerLeft(peerId, true);
+        }
+        return;
+    }
+
+    if (type == QStringLiteral("presenceUpdate")) {
+        const QString peerId = payload.value(QStringLiteral("id")).toString();
+        if (peerId.isEmpty() || peerId == m_localId) {
+            return;
+        }
+
+        const bool isNewPeer = !m_peers.contains(peerId);
+        ChatPeer peer = m_peers.value(peerId);
+        peer.id = peerId;
+        peer.name = payload.value(QStringLiteral("name")).toString(peer.name.isEmpty() ? tr("Unknown") : peer.name);
+        peer.status = payload.value(QStringLiteral("status")).toString(peer.status.isEmpty() ? tr("Available") : peer.status);
+        peer.personalMessage = payload.value(QStringLiteral("personalMessage")).toString(peer.personalMessage);
+        peer.themeColor = payload.value(QStringLiteral("themeColor")).toString(peer.themeColor);
+        const QString avatar = payload.value(QStringLiteral("avatar")).toString();
+        if (!avatar.isEmpty()) {
+            peer.avatarData = QByteArray::fromBase64(avatar.toLatin1());
+        }
+        const QString publicKey = payload.value(QStringLiteral("publicKey")).toString();
+        if (!publicKey.isEmpty()) {
+            peer.publicKeyData = QByteArray::fromBase64(publicKey.toLatin1());
+        }
+        const QHostAddress socketAddress = socket->peerAddress();
+        if (!socketAddress.isNull()) {
+            peer.address = socketAddress;
+        } else if (peer.address.isNull()) {
+            peer.address = QHostAddress(socket->property("senderAddress").toString());
+        }
+        const int port = payload.value(QStringLiteral("port")).toInt(peer.port);
+        if (port > 0) {
+            peer.port = static_cast<quint16>(port);
+        }
+        peer.lastSeen = QDateTime::currentDateTimeUtc();
+        peer.publicChatOpen = payload.value(QStringLiteral("publicChatOpen")).toBool(peer.publicChatOpen);
+        peer.protocolVersion = payload.value(QStringLiteral("protocolVersion")).toInt(peer.protocolVersion <= 0 ? 1 : peer.protocolVersion);
+        if (peer.address.isNull() || peer.port == 0) {
+            return;
+        }
+
+        m_peers.insert(peer.id, peer);
+        if (isNewPeer) {
+            emit peerJoined(peer);
+        } else {
+            emit peerUpdated(peer);
+        }
         return;
     }
 
@@ -1646,9 +1738,56 @@ void LanChatService::sendPresenceMessage(const QString &type)
     }
 }
 
+void LanChatService::sendDirectPresenceUpdate(bool includeLargeProfile)
+{
+    if (!m_tcpServer->isListening() || m_peers.isEmpty() || m_localStatus == tr("Invisible")) {
+        return;
+    }
+
+    QJsonObject payload;
+    payload.insert(QStringLiteral("type"), QStringLiteral("presenceUpdate"));
+    payload.insert(QStringLiteral("id"), m_localId);
+    payload.insert(QStringLiteral("name"), m_localName);
+    payload.insert(QStringLiteral("status"), effectiveLocalStatus());
+    payload.insert(QStringLiteral("personalMessage"), m_localPersonalMessage);
+    payload.insert(QStringLiteral("themeColor"), m_localThemeColor);
+    payload.insert(QStringLiteral("port"), static_cast<int>(m_tcpServer->serverPort()));
+    payload.insert(QStringLiteral("publicChatOpen"), m_publicChatOpen);
+    payload.insert(QStringLiteral("protocolVersion"), ProtocolVersion);
+    if (includeLargeProfile) {
+        payload.insert(QStringLiteral("avatar"), QString::fromLatin1(m_localAvatarData.toBase64()));
+        payload.insert(QStringLiteral("publicKey"), QString::fromLatin1(m_publicKeyData.toBase64()));
+    }
+
+    const QList<ChatPeer> peers = m_peers.values();
+    for (const ChatPeer &peer : peers) {
+        if (!peer.address.isNull() && peer.port > 0) {
+            sendSilentJsonPayload(peer, payload);
+        }
+    }
+}
+
+void LanChatService::sendDirectPresenceBye()
+{
+    if (m_peers.isEmpty()) {
+        return;
+    }
+
+    QJsonObject payload;
+    payload.insert(QStringLiteral("type"), QStringLiteral("presenceBye"));
+    payload.insert(QStringLiteral("id"), m_localId);
+
+    const QList<ChatPeer> peers = m_peers.values();
+    for (const ChatPeer &peer : peers) {
+        if (!peer.address.isNull() && peer.port > 0) {
+            sendSilentJsonPayload(peer, payload);
+        }
+    }
+}
+
 void LanChatService::loadSettings()
 {
-    QSettings settings(QStringLiteral("LANChat"), QStringLiteral("LANChat"));
+    QSettings settings(QStringLiteral("Exe Innovate"), QStringLiteral("Blinq Messenger"));
     m_localId = settings.value(QStringLiteral("profile/id"), m_localId).toString();
     m_localName = settings.value(QStringLiteral("profile/name"), m_localName).toString();
     m_localStatus = settings.value(QStringLiteral("profile/status"), QStringLiteral("Available")).toString();
@@ -1672,7 +1811,7 @@ void LanChatService::loadSettings()
 
 void LanChatService::saveSettings() const
 {
-    QSettings settings(QStringLiteral("LANChat"), QStringLiteral("LANChat"));
+    QSettings settings(QStringLiteral("Exe Innovate"), QStringLiteral("Blinq Messenger"));
     settings.setValue(QStringLiteral("profile/id"), m_localId);
     settings.setValue(QStringLiteral("profile/name"), m_localName);
     settings.setValue(QStringLiteral("profile/status"), m_localStatus);

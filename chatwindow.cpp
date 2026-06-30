@@ -101,11 +101,11 @@ QString statusColor(const QString &status)
 
 QString lastSeenText(const QDateTime &lastSeen, const QString &status)
 {
+    if (status != QObject::tr("Offline") && status != QObject::tr("Invisible")) {
+        return QObject::tr("Last seen now");
+    }
     if (!lastSeen.isValid()) {
         return QObject::tr("Last seen unknown");
-    }
-    if (status != QObject::tr("Offline") && status != QObject::tr("Idle") && lastSeen.secsTo(QDateTime::currentDateTimeUtc()) < 20) {
-        return QObject::tr("Last seen now");
     }
     return QObject::tr("Last seen %1").arg(lastSeen.toLocalTime().toString(QStringLiteral("MMM d, h:mm AP")));
 }
@@ -294,7 +294,7 @@ void setPlainNativeWindowTitle(QWidget *window, const QString &title)
 QString imageMessageHtml(const QString &sender, const QString &fileName, const QString &filePath, bool outgoing)
 {
     const QString fileUrl = QUrl::fromLocalFile(filePath).toString();
-    QUrl saveUrl(QStringLiteral("lanchat-save-image:"));
+    QUrl saveUrl(QStringLiteral("blinq-save-image:"));
     QUrlQuery query;
     query.addQueryItem(QStringLiteral("path"), filePath);
     query.addQueryItem(QStringLiteral("name"), QFileInfo(filePath).fileName());
@@ -880,7 +880,7 @@ void ChatWindow::connectSignals()
 
 void ChatWindow::handleTranscriptLink(const QUrl &url)
 {
-    if (url.scheme() == QStringLiteral("lanchat-save-image")) {
+    if (url.scheme() == QStringLiteral("blinq-save-image")) {
         const QUrlQuery query(url);
         const QString sourcePath = query.queryItemValue(QStringLiteral("path"));
         if (sourcePath.isEmpty() || !QFileInfo::exists(sourcePath)) {

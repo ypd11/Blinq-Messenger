@@ -1,6 +1,7 @@
 #include "internetrelayservice.h"
 
 #include <QAbstractSocket>
+#include <QCoreApplication>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -34,6 +35,7 @@ InternetRelayPeer peerFromObject(const QJsonObject &object)
     peer.personalMessage = object.value(QStringLiteral("personalMessage")).toString();
     peer.avatar = object.value(QStringLiteral("avatar")).toString();
     peer.themeColor = object.value(QStringLiteral("themeColor")).toString();
+    peer.lastSeenAt = object.value(QStringLiteral("lastSeenAt")).toString();
     return peer;
 }
 
@@ -186,13 +188,14 @@ void InternetRelayService::disconnectFromServer()
     }
 }
 
-void InternetRelayService::signUp(const QString &username, const QString &password, const QString &displayName)
+void InternetRelayService::signUp(const QString &username, const QString &password, const QString &displayName, const QString &email)
 {
     QJsonObject object;
     object.insert(QStringLiteral("type"), QStringLiteral("signup"));
     object.insert(QStringLiteral("username"), username.trimmed());
     object.insert(QStringLiteral("password"), password);
     object.insert(QStringLiteral("displayName"), displayName.trimmed());
+    object.insert(QStringLiteral("email"), email.trimmed());
     sendJson(object);
 }
 
@@ -210,6 +213,13 @@ void InternetRelayService::resume(const QString &token)
     QJsonObject object;
     object.insert(QStringLiteral("type"), QStringLiteral("resume"));
     object.insert(QStringLiteral("token"), token.trimmed());
+    sendJson(object);
+}
+
+void InternetRelayService::logout()
+{
+    QJsonObject object;
+    object.insert(QStringLiteral("type"), QStringLiteral("logout"));
     sendJson(object);
 }
 
@@ -267,6 +277,20 @@ void InternetRelayService::addContact(const QString &blinqId)
     QJsonObject object;
     object.insert(QStringLiteral("type"), QStringLiteral("addContact"));
     object.insert(QStringLiteral("to"), normalizeBlinqId(blinqId));
+    sendJson(object);
+}
+
+void InternetRelayService::removeContact(const QString &peerId)
+{
+    const QString target = targetForPeer(peerId);
+    if (target.isEmpty()) {
+        emit errorOccurred(tr("That internet contact is not available."));
+        return;
+    }
+
+    QJsonObject object;
+    object.insert(QStringLiteral("type"), QStringLiteral("removeContact"));
+    object.insert(QStringLiteral("to"), target);
     sendJson(object);
 }
 
@@ -387,6 +411,46 @@ void InternetRelayService::changePassword(const QString &currentPassword, const 
     sendJson(object);
 }
 
+void InternetRelayService::setRecoveryEmail(const QString &email, const QString &password)
+{
+    QJsonObject object;
+    object.insert(QStringLiteral("type"), QStringLiteral("setRecoveryEmail"));
+    object.insert(QStringLiteral("email"), email.trimmed());
+    object.insert(QStringLiteral("password"), password);
+    sendJson(object);
+}
+
+void InternetRelayService::requestPasswordReset(const QString &identifier)
+{
+    QJsonObject object;
+    object.insert(QStringLiteral("type"), QStringLiteral("requestPasswordReset"));
+    object.insert(QStringLiteral("identifier"), identifier.trimmed());
+    sendJson(object);
+}
+
+void InternetRelayService::resetPassword(const QString &identifier, const QString &code, const QString &newPassword)
+{
+    QJsonObject object;
+    object.insert(QStringLiteral("type"), QStringLiteral("resetPassword"));
+    object.insert(QStringLiteral("identifier"), identifier.trimmed());
+    object.insert(QStringLiteral("code"), code.trimmed());
+    object.insert(QStringLiteral("newPassword"), newPassword);
+    sendJson(object);
+}
+
+void InternetRelayService::sendFeedback(const QString &category, const QString &message, const QString &contactEmail, const QString &platform, const QString &debugInfo)
+{
+    QJsonObject object;
+    object.insert(QStringLiteral("type"), QStringLiteral("sendFeedback"));
+    object.insert(QStringLiteral("category"), category.trimmed());
+    object.insert(QStringLiteral("message"), message.trimmed());
+    object.insert(QStringLiteral("contactEmail"), contactEmail.trimmed());
+    object.insert(QStringLiteral("platform"), platform.trimmed());
+    object.insert(QStringLiteral("appVersion"), QCoreApplication::applicationVersion());
+    object.insert(QStringLiteral("debugInfo"), debugInfo.trimmed());
+    sendJson(object);
+}
+
 void InternetRelayService::deleteAccount(const QString &password)
 {
     QJsonObject object;
@@ -460,6 +524,16 @@ void InternetRelayService::processLine(const QByteArray &line)
         return;
     }
 
+    if (type == QStringLiteral("passwordResetRequested")) {
+        emit passwordResetRequested();
+        return;
+    }
+
+    if (type == QStringLiteral("passwordReset")) {
+        emit passwordReset();
+        return;
+    }
+
     if (!m_authenticated) {
         return;
     }
@@ -470,8 +544,24 @@ void InternetRelayService::processLine(const QByteArray &line)
         return;
     }
 
+    if (type == QStringLiteral("signedOut")) {
+        emit signedOut();
+        resetSession();
+        return;
+    }
+
     if (type == QStringLiteral("passwordChanged")) {
         emit passwordChanged();
+        return;
+    }
+
+    if (type == QStringLiteral("recoveryEmailSet")) {
+        emit recoveryEmailSet();
+        return;
+    }
+
+    if (type == QStringLiteral("feedbackSent")) {
+        emit feedbackSent();
         return;
     }
 

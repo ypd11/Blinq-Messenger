@@ -6,6 +6,7 @@
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QObject>
+#include <QThread>
 #include <QWidget>
 
 #ifdef Q_OS_WIN
@@ -67,17 +68,40 @@ int main(int argc, char *argv[])
     a.installEventFilter(&titleFilter);
 #endif
     const bool startupLaunch = a.arguments().contains(QStringLiteral("--startup"));
+    const bool restartLaunch = a.arguments().contains(QStringLiteral("--restarted"));
 
     const QString serverName = QStringLiteral("BlinqMessenger.SingleInstance");
     QLocalSocket socket;
     socket.connectToServer(serverName);
     if (socket.waitForConnected(10)) {
-        if (!startupLaunch) {
+        if (restartLaunch) {
+            socket.disconnectFromServer();
+            socket.waitForDisconnected(100);
+
+            bool oldInstanceStillRunning = true;
+            for (int attempt = 0; attempt < 60; ++attempt) {
+                QThread::msleep(100);
+                QLocalSocket probe;
+                probe.connectToServer(serverName);
+                if (!probe.waitForConnected(25)) {
+                    oldInstanceStillRunning = false;
+                    break;
+                }
+                probe.disconnectFromServer();
+                probe.waitForDisconnected(25);
+            }
+
+            if (oldInstanceStillRunning) {
+                return 0;
+            }
+        } else if (!startupLaunch) {
             socket.write("activate");
             socket.flush();
             socket.waitForBytesWritten(150);
+            return 0;
+        } else {
+            return 0;
         }
-        return 0;
     }
 
     QLocalServer::removeServer(serverName);
@@ -92,7 +116,9 @@ int main(int argc, char *argv[])
         w.showFromTray();
     });
     if (!startupLaunch) {
-        w.show();
+        w.showInitialWindow();
+    } else {
+        w.startConnectionServices();
     }
     return QApplication::exec();
 }

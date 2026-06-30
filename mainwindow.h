@@ -3,6 +3,7 @@
 
 #include <QHash>
 #include <QColor>
+#include <QDateTime>
 #include <QMainWindow>
 #include <QLabel>
 #include <QSet>
@@ -60,9 +61,12 @@ class MainWindow : public QMainWindow
 public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow() override;
+    void showInitialWindow();
+    void startConnectionServices();
     void showFromTray();
 
 private:
+    void positionAtBottomRight();
     bool nativeEvent(const QByteArray &eventType, void *message, qintptr *result) override;
     bool eventFilter(QObject *watched, QEvent *event) override;
     void closeEvent(QCloseEvent *event) override;
@@ -80,17 +84,22 @@ private:
     void openChat(const QString &peerId);
     void openPublicChat();
     void showInternetSignInDialog();
+    void showPasswordResetDialog(const QString &identifier = QString());
     void showAddInternetContactDialog();
     void switchAppMode();
+    bool canReachInternetServer(QString *errorMessage = nullptr) const;
+    void signOutBlinqAccount();
     void deleteBlinqAccount();
     void changeBlinqPassword();
     void handleInternetServerUnavailable(const QString &reason);
     void restartApplication();
     void sendPendingReadReceipts(const QString &peerId);
     void changeDisplayName();
+    void setAvatar();
     void showDirectConnectDialog();
     void showConnectionInviteDialog();
     void showFirewallHelperDialog();
+    void refreshConnection();
     void scanLocalSubnet();
     void reconnectSavedContacts();
     void showSettings();
@@ -98,18 +107,22 @@ private:
     void resetAppSettings();
     void backupAppData();
     void restoreAppData();
+    bool shouldShowWelcomeDialog() const;
     void showWelcomeDialog();
     void showAbout();
     void showHelp();
+    void showFeedbackDialog();
+    void showDonateDialog();
     void showUpdateDialog();
     void showConnectionInfo();
     QWidget *dialogParent() const;
-    bool showIncomingNotification(const ChatPeer &peer, const QString &message);
-    bool showPublicIncomingNotification(const QString &sender, const QString &message);
+    bool showIncomingNotification(const ChatPeer &peer, const QString &message, const QString &senderName = QString());
+    bool showPublicIncomingNotification();
     void showNativeNotification(const QString &title, const QString &message, const QIcon &icon);
     void openPendingNotification();
     void markChatActive();
     void markChatIdle();
+    bool clearUnreadForPeer(const QString &peerId);
     void updateTrayTooltip();
     void updateNetworkStatus();
     void updateEmptyContactsLabel();
@@ -149,6 +162,7 @@ private:
     void playSound(QSoundEffect *sound);
     void setSoundsMuted(bool muted);
     void clearSelectedHistory();
+    void deleteSelectedInternetContact();
     void blockSelectedPeer();
     void unblockSelectedPeer();
     void buzzSelectedPeer();
@@ -236,10 +250,16 @@ private:
     QString m_draggedPeerId;
     QString m_manualPersonalMessage;
     QString m_currentMediaText;
+    QDateTime m_publicChatUnattendedSince;
+    QDateTime m_lastPublicChatNotificationAt;
+    QByteArray m_internetAvatarData;
     bool m_pendingNotificationIsPublic = false;
     bool m_authDialogOpen = false;
     bool m_isLoading = true;
     bool m_suppressSignInNotifications = true;
+    bool m_refreshingConnection = false;
+    bool m_signingOut = false;
+    bool m_connectionServicesStarted = false;
     AppSettings m_settings;
 };
 

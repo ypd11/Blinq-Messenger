@@ -250,6 +250,7 @@
       <p>The contact list is organized into Favorites, custom groups, Online, Away / Idle, Busy, and Offline.</p>
       <ul>
         <li>Right-click a contact to open chat, view contact info, send a file, whistle, favorite, move to a group, clear history, or block.</li>
+        <li>In Internet Mode, right-click a contact and choose <code>Delete Chat</code> to remove the local chat history, or <code>Delete Contact</code> to remove the contact and your chat with them.</li>
         <li>Drag contacts between custom groups.</li>
         <li>Use <code>Chat &gt; Manage Contact Groups...</code> to create, rename, or delete custom groups.</li>
         <li>Blocked users are hidden and their messages/files/public chat posts are ignored.</li>
@@ -261,6 +262,8 @@
       <p>Internet Mode lets you sign in with a Blinq ID and chat privately with approved contacts through the Blinq Internet service.</p>
       <ul>
         <li>Use <code>Profile &gt; Switch to Internet Mode</code> to sign in or create a Blinq account.</li>
+        <li>Use <code>Profile &gt; Sign Out</code> when you want to disconnect this computer from your Blinq account.</li>
+        <li>Use <code>Forgot password?</code> on the sign-in window to reset your password with your recovery email.</li>
         <li>Use <code>Chat &gt; Add Contact...</code> to search by display name or Blinq ID, or to add someone directly when you already know their full Blinq ID.</li>
         <li>Internet contacts can exchange private messages, images, typing state, read receipts, whistles, profile details, and presence when the server is reachable.</li>
         <li>Use <code>Profile &gt; Settings</code> and turn off <code>Allow people to find me in Internet search</code> if you only want people to add you when you share your Blinq ID yourself.</li>
@@ -279,6 +282,7 @@
       <h2>Settings and Tray</h2>
       <ul>
         <li>Open <code>Profile &gt; Settings</code> to adjust behavior, sounds, notifications, history, startup, and blocked users.</li>
+        <li>In Internet Mode, use Settings to change your Blinq password, recovery email, or sign out.</li>
         <li>Enable <code>Hide my typing indicator</code> if you do not want contacts to see when you are typing.</li>
         <li>Disable <code>Allow people to find me in Internet search</code> to opt out of Internet Mode account discovery.</li>
         <li>Enable <code>Send an away auto-reply</code> to reply once every few minutes per contact while your status is Away, Busy, Idle, or a custom status.</li>
@@ -302,6 +306,7 @@
       <p>In LAN Mode, Blinq Messenger uses a local UDP discovery channel to find nearby users, then direct TCP connections for private messages, file transfers, drawings, and direct-connect handshakes. In Internet Mode, private chat uses the configured Blinq Internet server.</p>
       <ul>
         <li>Use <code>Chat &gt; Network Diagnostics</code> to see the actual LAN discovery state and the TCP port this copy of Blinq Messenger is using right now.</li>
+        <li>Use <code>Chat &gt; Refresh Connection</code> if the app was suspended, the network changed, or contacts stop updating.</li>
         <li>Use <code>Chat &gt; Copy Connection Invite</code> to copy your current IP and TCP port for someone else to paste into Direct Connect.</li>
         <li>Use <code>Chat &gt; Reconnect Saved Contacts</code> to try remembered contacts and saved manual IPs again.</li>
         <li>Use <code>Chat &gt; Scan Local Network</code> as an optional fallback when discovery is blocked. It checks nearby local addresses using Direct Connect.</li>
@@ -334,6 +339,10 @@
       <details>
         <summary>What if discovery works for one user but not another?</summary>
         <p>The user whose discovery channel is unavailable may not see contacts automatically. Other users might still see them if outbound announcements are allowed, and direct chats can still work when the active TCP port is reachable.</p>
+      </details>
+      <details>
+        <summary>What is the difference between Delete Chat and Delete Contact?</summary>
+        <p>Delete Chat removes the saved conversation on this computer. Delete Contact in Internet Mode removes the contact and also deletes your local chat with them.</p>
       </details>
       <details>
         <summary>Why does Blinq remember contacts?</summary>

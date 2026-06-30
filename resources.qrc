@@ -7,6 +7,7 @@
         <file>assets/html.png</file>
         <file>assets/whistle.png</file>
         <file>assets/avatar.png</file>
+        <file>assets/avatar_placeholder.png</file>
         <file>assets/clear_history.png</file>
         <file>assets/display_name.png</file>
         <file>assets/direct_connect.png</file>
@@ -18,6 +19,7 @@
         <file>assets/about.png</file>
         <file>assets/help.png</file>
         <file>assets/updates.png</file>
+        <file>assets/feedback.png</file>
         <file>assets/public_chat.png</file>
         <file>assets/open_chat.png</file>
         <file>assets/exit.png</file>

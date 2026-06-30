@@ -59,6 +59,7 @@ public:
 
 public slots:
     void start();
+    void refreshConnection();
     void connectToAddress(const QString &address);
     void setLocalName(const QString &name);
     void setLocalStatus(const QString &status);
@@ -121,6 +122,8 @@ private:
     QString privateInteractionRejectReason() const;
     void sendPrivateChatReject(const QString &peerId, const QString &reason);
     void sendPresenceMessage(const QString &type);
+    void sendDirectPresenceUpdate(bool includeLargeProfile = false);
+    void sendDirectPresenceBye();
     void loadSettings();
     void saveSettings() const;
     void ensurePrivateMessageKeys();

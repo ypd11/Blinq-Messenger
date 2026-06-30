@@ -14,13 +14,19 @@ $distDir = Join-Path $root "deploy\windows\dist\BlinqMessenger"
 $installerDir = Join-Path $root "deploy\windows\installer"
 $qtBin = Join-Path $QtDir "bin"
 $mingwBin = "C:\Qt\Qt\Tools\mingw1310_64\bin"
-$windeployqt = Join-Path $qtBin "windeployqt.exe"
+$qtPlugins = Join-Path $QtDir "plugins"
 
 if (-not (Test-Path -LiteralPath $CMake)) {
     throw "CMake was not found at $CMake"
 }
-if (-not (Test-Path -LiteralPath $windeployqt)) {
-    throw "windeployqt was not found at $windeployqt"
+if (-not (Test-Path -LiteralPath $qtBin)) {
+    throw "Qt bin directory was not found at $qtBin"
+}
+if (-not (Test-Path -LiteralPath $mingwBin)) {
+    throw "MinGW bin directory was not found at $mingwBin"
+}
+if (-not (Test-Path -LiteralPath $qtPlugins)) {
+    throw "Qt plugins directory was not found at $qtPlugins"
 }
 
 $env:PATH = "$qtBin;$mingwBin;$env:PATH"
@@ -39,7 +45,70 @@ Copy-Item -LiteralPath (Join-Path $root "help.html") -Destination $distDir
 New-Item -ItemType Directory -Path (Join-Path $distDir "assets") -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $root "assets\appicon.ico") -Destination (Join-Path $distDir "assets\appicon.ico")
 
-& $windeployqt --release --no-translations --compiler-runtime (Join-Path $distDir "messenger.exe")
+function Copy-ReleaseFile {
+    param(
+        [string]$Source,
+        [string]$Destination
+    )
+    if (-not (Test-Path -LiteralPath $Source)) {
+        throw "Required release file was not found: $Source"
+    }
+    $destinationDir = Split-Path -Parent $Destination
+    if (-not (Test-Path -LiteralPath $destinationDir)) {
+        New-Item -ItemType Directory -Path $destinationDir -Force | Out-Null
+    }
+    Copy-Item -LiteralPath $Source -Destination $Destination -Force
+}
+
+$qtRootDlls = @(
+    "Qt6Core.dll",
+    "Qt6Gui.dll",
+    "Qt6Multimedia.dll",
+    "Qt6Network.dll",
+    "Qt6Svg.dll",
+    "Qt6Widgets.dll",
+    "opengl32sw.dll",
+    "D3Dcompiler_47.dll",
+    "avcodec-61.dll",
+    "avformat-61.dll",
+    "avutil-59.dll",
+    "swresample-5.dll",
+    "swscale-8.dll"
+)
+foreach ($dll in $qtRootDlls) {
+    Copy-ReleaseFile -Source (Join-Path $qtBin $dll) -Destination (Join-Path $distDir $dll)
+}
+
+$mingwDlls = @("libgcc_s_seh-1.dll", "libstdc++-6.dll", "libwinpthread-1.dll")
+foreach ($dll in $mingwDlls) {
+    Copy-ReleaseFile -Source (Join-Path $mingwBin $dll) -Destination (Join-Path $distDir $dll)
+}
+
+$pluginFiles = @(
+    "generic\qtuiotouchplugin.dll",
+    "iconengines\qsvgicon.dll",
+    "imageformats\qgif.dll",
+    "imageformats\qico.dll",
+    "imageformats\qjpeg.dll",
+    "imageformats\qsvg.dll",
+    "multimedia\ffmpegmediaplugin.dll",
+    "multimedia\windowsmediaplugin.dll",
+    "networkinformation\qnetworklistmanager.dll",
+    "platforms\qwindows.dll",
+    "styles\qmodernwindowsstyle.dll",
+    "tls\qcertonlybackend.dll",
+    "tls\qschannelbackend.dll"
+)
+foreach ($plugin in $pluginFiles) {
+    Copy-ReleaseFile -Source (Join-Path $qtPlugins $plugin) -Destination (Join-Path $distDir $plugin)
+}
+
+$requiredDlls = @("Qt6Core.dll", "Qt6Gui.dll", "Qt6Network.dll", "Qt6Multimedia.dll")
+foreach ($dll in $requiredDlls) {
+    if (-not (Test-Path -LiteralPath (Join-Path $distDir $dll))) {
+        throw "Release package is missing $dll"
+    }
+}
 
 if (-not $SkipInstaller) {
     if (-not (Test-Path -LiteralPath $InnoSetupCompiler)) {

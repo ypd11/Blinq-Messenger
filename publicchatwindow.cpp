@@ -120,6 +120,7 @@ QString publicMessageHtml(const QString &sender,
                           bool isHtml)
 {
     const QString nameColor = outgoing ? QStringLiteral("#075985") : QStringLiteral("#155e75");
+    const QString accentColor = outgoing ? QStringLiteral("#1d9bf0") : QStringLiteral("#0f766e");
     const QString messageHtml = displayMessageHtml(message, isHtml);
 
     if (outgoing) {
@@ -130,14 +131,18 @@ QString publicMessageHtml(const QString &sender,
                    "<td width=\"82%\" align=\"right\" style=\"padding:3px 12px 6px 12px;\">"
                    "<div align=\"right\"><span style=\"color:%1; font-weight:700; font-size:9pt;\">%2</span>"
                    "&nbsp;&nbsp;<span style=\"color:#64748b; font-size:8pt;\">%3</span></div>"
-                   "<div align=\"right\" style=\"color:#111827; font-size:11pt; margin-top:1px;\">%4</div>"
+                   "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"0\"><tr>"
+                   "<td style=\"padding-right:8px;\"><div align=\"right\" style=\"color:#111827; font-size:11pt; margin-top:1px;\">%4</div></td>"
+                   "<td width=\"3\" bgcolor=\"%5\"></td>"
+                   "</tr></table>"
                    "</td>"
                    "</tr>"
                    "</table>")
             .arg(nameColor,
                  sender.toHtmlEscaped(),
                  timestamp.toHtmlEscaped(),
-                 messageHtml);
+                 messageHtml,
+                 accentColor);
     }
 
     return QStringLiteral(
@@ -146,7 +151,10 @@ QString publicMessageHtml(const QString &sender,
                "<td width=\"82%\" align=\"left\" style=\"padding:3px 12px 6px 12px;\">"
                "<div align=\"left\"><span style=\"color:%1; font-weight:700; font-size:9pt;\">%2</span>"
                "&nbsp;&nbsp;<span style=\"color:#64748b; font-size:8pt;\">%3</span></div>"
-               "<div align=\"left\" style=\"color:#111827; font-size:11pt; margin-top:1px;\">%4</div>"
+               "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"0\"><tr>"
+               "<td width=\"3\" bgcolor=\"%5\"></td>"
+               "<td style=\"padding-left:8px;\"><div align=\"left\" style=\"color:#111827; font-size:11pt; margin-top:1px;\">%4</div></td>"
+               "</tr></table>"
                "</td>"
                "<td width=\"18%\"></td>"
                "</tr>"
@@ -154,7 +162,8 @@ QString publicMessageHtml(const QString &sender,
         .arg(nameColor,
              sender.toHtmlEscaped(),
              timestamp.toHtmlEscaped(),
-             messageHtml);
+             messageHtml,
+             accentColor);
 }
 
 QPixmap participantAvatar(const QByteArray &avatarData, const QString &fallbackText, const QColor &frameColor)

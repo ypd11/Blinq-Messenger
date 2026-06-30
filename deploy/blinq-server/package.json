@@ -5,6 +5,7 @@
   "description": "Blinq Messenger internet relay server",
   "main": "server.js",
   "dependencies": {
-    "better-sqlite3": "^11.10.0"
+    "better-sqlite3": "^11.10.0",
+    "firebase-admin": "^13.6.0"
   }
 }

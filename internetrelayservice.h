@@ -19,6 +19,7 @@ struct InternetRelayPeer
     QString personalMessage;
     QString avatar;
     QString themeColor;
+    QString lastSeenAt;
 };
 
 struct InternetContactRequest
@@ -51,14 +52,16 @@ public:
 public slots:
     void connectToServer(const QString &host, quint16 port);
     void disconnectFromServer();
-    void signUp(const QString &username, const QString &password, const QString &displayName);
+    void signUp(const QString &username, const QString &password, const QString &displayName, const QString &email);
     void login(const QString &username, const QString &password);
     void resume(const QString &token);
+    void logout();
     void setPresence(const QString &status, const QString &personalMessage);
     void setProfile(const QString &displayName, const QByteArray &avatarData, const QString &themeColor = QString());
     void setSearchable(bool searchable);
     void searchUsers(const QString &query);
     void addContact(const QString &blinqId);
+    void removeContact(const QString &peerId);
     void acceptContact(const QString &requestId);
     void rejectContact(const QString &requestId);
     void sendMessage(const QString &peerId, const QString &message, bool isHtml = false);
@@ -67,6 +70,10 @@ public slots:
     void sendReceipt(const QString &peerId, const QString &messageId, const QString &status);
     void sendBuzz(const QString &peerId);
     void changePassword(const QString &currentPassword, const QString &newPassword);
+    void setRecoveryEmail(const QString &email, const QString &password);
+    void requestPasswordReset(const QString &identifier);
+    void resetPassword(const QString &identifier, const QString &code, const QString &newPassword);
+    void sendFeedback(const QString &category, const QString &message, const QString &contactEmail, const QString &platform, const QString &debugInfo);
     void deleteAccount(const QString &password);
 
 signals:
@@ -86,7 +93,12 @@ signals:
     void buzzReceived(const QString &peerId, const QString &peerName);
     void buzzSent(const QString &peerId);
     void accountDeleted();
+    void signedOut();
     void passwordChanged();
+    void recoveryEmailSet();
+    void passwordResetRequested();
+    void passwordReset();
+    void feedbackSent();
     void presenceReceived(const InternetRelayPeer &peer);
     void userSearchResultsReceived(const QString &query, const QList<InternetUserSearchResult> &results);
 

@@ -170,6 +170,17 @@ SettingsDialog::SettingsDialog(const AppSettings &settings, QWidget *parent)
     resetLayout->setContentsMargins(12, 12, 12, 12);
     resetLayout->setSpacing(12);
 
+    auto *signOutRow = new QWidget(resetPage);
+    signOutRow->setVisible(settings.appMode == QStringLiteral("internet") && !settings.internetBlinqId.isEmpty());
+    auto *signOutRowLayout = new QHBoxLayout(signOutRow);
+    signOutRowLayout->setContentsMargins(0, 0, 0, 0);
+    signOutRowLayout->setSpacing(12);
+    auto *signOutText = new QLabel(tr("Sign out of this Blinq account on this computer."), signOutRow);
+    signOutText->setWordWrap(true);
+    auto *signOutButton = new QPushButton(tr("Sign Out"), signOutRow);
+    signOutRowLayout->addWidget(signOutText, 1);
+    signOutRowLayout->addWidget(signOutButton, 0);
+
     auto *accountRow = new QWidget(resetPage);
     accountRow->setVisible(settings.appMode == QStringLiteral("internet") && !settings.internetBlinqId.isEmpty());
     auto *accountRowLayout = new QHBoxLayout(accountRow);
@@ -226,12 +237,16 @@ SettingsDialog::SettingsDialog(const AppSettings &settings, QWidget *parent)
     restoreRowLayout->addWidget(restoreText, 1);
     restoreRowLayout->addWidget(restoreButton, 0);
 
-    resetLayout->addWidget(accountRow);
+    resetLayout->addWidget(signOutRow);
     resetLayout->addWidget(passwordRow);
+    resetLayout->addWidget(accountRow);
     resetLayout->addWidget(backupRow);
     resetLayout->addWidget(restoreRow);
     resetLayout->addWidget(resetRow);
     resetLayout->addStretch();
+    connect(signOutButton, &QPushButton::clicked, this, [this] {
+        emit signOutBlinqAccountRequested();
+    });
     connect(deleteAccountButton, &QPushButton::clicked, this, [this] {
         emit deleteBlinqAccountRequested();
     });

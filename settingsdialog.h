@@ -49,6 +49,7 @@ signals:
     void resetSettingsRequested();
     void backupDataRequested();
     void restoreDataRequested();
+    void signOutBlinqAccountRequested();
     void deleteBlinqAccountRequested();
     void changeBlinqPasswordRequested();
 
