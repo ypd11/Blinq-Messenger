@@ -5,20 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Blinq Messenger</title>
   <meta name="description" content="Blinq Messenger is a friendly Windows and Android messenger for LAN and Internet chat.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://blinqm.net/">
+  <link rel="icon" href="assets/appicon.ico" sizes="any">
   <style>
     :root {
-      --accent: #0ea5a4;
-      --accent-dark: #0f766e;
+      --accent: #1d9bf0;
+      --accent-dark: #0f6fb8;
       --rose: #e11d48;
       --green: #16a34a;
       --ink: #0f172a;
       --muted: #53657d;
-      --line: #cddff2;
-      --line-strong: #9cc7e7;
-      --page: #f3f8fb;
+      --line: #d7e8f8;
+      --line-strong: #7dbde5;
+      --page: #eef5ff;
       --panel: #ffffff;
-      --soft: #e9fbfb;
-      --soft-rose: #fff0f5;
+      --soft: #eaf7ff;
+      --soft-rose: #f5f9ff;
       --shadow: 0 18px 45px rgba(15, 23, 42, 0.11);
     }
 
@@ -105,6 +108,37 @@
       background: var(--soft);
     }
 
+    .nav-toggle {
+      display: none;
+      width: 40px;
+      height: 40px;
+      place-items: center;
+      padding: 0;
+      border: 1px solid #c7dff2;
+      border-radius: 8px;
+      background: linear-gradient(180deg, #ffffff, #edf8ff);
+      color: #0f2748;
+      cursor: pointer;
+    }
+
+    .nav-toggle svg {
+      width: 26px;
+      height: 26px;
+      fill: currentColor;
+    }
+
+    .nav-overlay {
+      display: none;
+    }
+
+    .nav-close {
+      display: none;
+    }
+
+    .mobile-nav {
+      display: none;
+    }
+
     .hero {
       padding: 56px 0 46px;
     }
@@ -122,10 +156,10 @@
       gap: 8px;
       margin: 0 0 16px;
       padding: 7px 10px;
-      border: 1px solid #bde8e6;
+      border: 1px solid #bde3ff;
       border-radius: 8px;
       background: rgba(255, 255, 255, 0.78);
-      color: #0f766e;
+      color: #0f6fb8;
       font-size: 13px;
       font-weight: 900;
     }
@@ -181,7 +215,7 @@
 
     .button.primary {
       border-color: var(--accent-dark);
-      background: linear-gradient(180deg, #2dd4bf, var(--accent));
+      background: linear-gradient(180deg, #66c6ff, var(--accent));
       color: #ffffff;
       text-shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
     }
@@ -426,7 +460,7 @@
       border: 1px solid var(--line-strong);
       border-radius: 8px;
       background:
-        linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(233, 251, 251, 0.9)),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(234, 247, 255, 0.92)),
         #ffffff;
       box-shadow: var(--shadow);
     }
@@ -440,6 +474,31 @@
       flex-wrap: wrap;
       gap: 10px;
       justify-content: flex-end;
+    }
+
+    .license-panel {
+      padding: 22px;
+      border: 1px solid #d6e6f6;
+      border-radius: 8px;
+      background: #ffffff;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+    }
+
+    .license-panel h3 {
+      margin: 22px 0 8px;
+      color: #0f2748;
+      font-size: 18px;
+    }
+
+    .license-panel h3:first-child {
+      margin-top: 0;
+    }
+
+    .license-panel p {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.62;
     }
 
     .preview-modal {
@@ -469,12 +528,35 @@
 
     .modal-image-wrap img {
       display: block;
-      max-width: calc(100vw - 48px);
-      max-height: calc(100vh - 48px);
+      max-width: calc(100vw - 72px);
+      max-height: calc(100vh - 72px);
       width: auto;
       height: auto;
       object-fit: contain;
       vertical-align: top;
+    }
+
+    .modal-close {
+      position: fixed;
+      top: 18px;
+      right: 18px;
+      z-index: 5;
+      width: 44px;
+      height: 44px;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: #ffffff;
+      cursor: pointer;
+      filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.65));
+    }
+
+    .modal-close svg {
+      width: 32px;
+      height: 32px;
+      fill: currentColor;
     }
 
     footer {
@@ -523,10 +605,120 @@
     }
 
     @media (max-width: 640px) {
+      body.nav-open {
+        overflow: hidden;
+      }
+
+      .topbar {
+        position: sticky;
+        z-index: 1000;
+      }
+
+      body.nav-open .topbar {
+        z-index: 2147483000;
+      }
+
       .topbar-inner,
       .wrap,
       .footer-inner {
         width: min(100% - 28px, 1120px);
+      }
+
+      .topbar-inner {
+        align-items: center;
+        flex-direction: row;
+      }
+
+      .nav-toggle {
+        display: grid;
+        margin-left: auto;
+      }
+
+      .desktop-nav {
+        display: none;
+      }
+
+      .mobile-nav {
+        position: fixed;
+        top: 0;
+        right: 0;
+        z-index: 2147483200;
+        width: min(78vw, 290px);
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+        margin: 0;
+        padding: 18px 16px 16px;
+        overflow: auto;
+        border-left: 1px solid #bde3ff;
+        background: #ffffff;
+        box-shadow: -20px 0 42px rgba(15, 23, 42, 0.18);
+        transform: translateX(105%);
+        transition: transform 180ms ease;
+      }
+
+      body.nav-open .mobile-nav {
+        transform: translateX(0);
+      }
+
+      .nav a {
+        padding: 13px 4px;
+        border: 0;
+        border-bottom: 1px solid #e5effa;
+        border-radius: 0;
+        background: transparent;
+        color: #0f2748;
+        font-size: 16px;
+        font-weight: 800;
+      }
+
+      .nav a:hover {
+        background: transparent;
+        color: var(--accent-dark);
+      }
+
+      .nav-close {
+        display: grid;
+        place-items: center;
+        align-self: flex-end;
+        width: 38px;
+        height: 38px;
+        margin: 0 0 12px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: #0f2748;
+        cursor: pointer;
+      }
+
+      .nav-close svg {
+        width: 30px;
+        height: 30px;
+        fill: currentColor;
+      }
+
+      .nav-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483000;
+        display: block;
+        border: 0;
+        background: rgba(15, 23, 42, 0.52);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 180ms ease;
+      }
+
+      body.nav-open .nav-overlay {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      body.nav-open .actions,
+      body.nav-open .download-actions {
+        display: none;
       }
 
       .hero {
@@ -560,6 +752,119 @@
         grid-template-columns: 1fr;
       }
     }
+
+    @media (max-width: 480px) {
+      .topbar {
+        position: static;
+      }
+
+      .topbar-inner,
+      .wrap,
+      .footer-inner {
+        width: min(100% - 22px, 1120px);
+      }
+
+      .topbar-inner {
+        gap: 10px;
+      }
+
+      .brand {
+        font-size: 15px;
+      }
+
+      .brand img {
+        width: 27px;
+        height: 27px;
+      }
+
+      .hero {
+        padding: 28px 0 34px;
+      }
+
+      h1 {
+        font-size: 42px;
+        line-height: 0.98;
+      }
+
+      h2 {
+        font-size: 29px;
+      }
+
+      .lead,
+      .section-copy {
+        font-size: 15.5px;
+      }
+
+      .hero-pills {
+        gap: 6px;
+      }
+
+      .hero-pill {
+        font-size: 12px;
+        padding: 6px 8px;
+      }
+
+      .section {
+        padding: 36px 0;
+      }
+
+      .section-head {
+        display: block;
+      }
+
+      .gallery-body,
+      .feature,
+      .license-panel,
+      .download-panel {
+        padding: 14px;
+      }
+
+      .gallery-head h3 {
+        font-size: 18px;
+      }
+
+      .shot-frame {
+        height: 180px;
+      }
+
+      .gallery-card[data-gallery="android"] .shot-frame {
+        height: 250px;
+      }
+
+      .shot-frame img {
+        max-width: 94%;
+        max-height: 150px;
+      }
+
+      .gallery-card[data-gallery="android"] .shot-frame img {
+        max-height: 220px;
+      }
+
+      .license-panel h3 {
+        font-size: 16px;
+      }
+
+      .license-panel p {
+        font-size: 14px;
+      }
+
+      .modal-image-wrap img {
+        max-width: calc(100vw - 52px);
+        max-height: calc(100vh - 104px);
+      }
+
+      .modal-close {
+        top: 14px;
+        right: 14px;
+        width: 36px;
+        height: 36px;
+      }
+
+      .modal-close svg {
+        width: 30px;
+        height: 30px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -569,14 +874,30 @@
         <img src="assets/appicon.ico" alt="Blinq Messenger icon">
         <span>Blinq Messenger</span>
       </a>
-      <nav class="nav" aria-label="Main navigation">
+      <nav class="nav desktop-nav" aria-label="Main navigation">
         <a href="#screenshots">Screenshots</a>
         <a href="#features">Features</a>
         <a href="#downloads">Downloads</a>
+        <a href="#license">License</a>
         <a href="help.html">Help</a>
       </nav>
+      <button class="nav-toggle" type="button" id="nav-toggle" aria-label="Open navigation menu" aria-controls="site-nav" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+      </button>
     </div>
   </header>
+
+  <nav class="nav mobile-nav" id="site-nav" aria-label="Mobile navigation">
+    <button class="nav-close" type="button" id="nav-close" aria-label="Close navigation menu">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.3 5.71 12 12l6.3 6.29-1.41 1.41L10.59 13.41 4.29 19.71 2.88 18.3 9.17 12 2.88 5.71 4.29 4.29l6.3 6.3 6.3-6.3z"/></svg>
+    </button>
+    <a href="#screenshots">Screenshots</a>
+    <a href="#features">Features</a>
+    <a href="#downloads">Downloads</a>
+    <a href="#license">License</a>
+    <a href="help.html">Help</a>
+  </nav>
+  <button class="nav-overlay" type="button" id="nav-overlay" aria-label="Close navigation menu"></button>
 
   <main id="top">
     <section class="hero">
@@ -586,16 +907,16 @@
           <h1>Blinq Messenger</h1>
           <p class="lead">A light, friendly messenger for LAN conversations and Internet chat, with presence, custom profiles, rich messages, drawings, images, whistles, and Android push notifications.</p>
           <div class="actions">
-            <a class="button primary disabled" href="#" aria-disabled="true">
+            <a class="button primary" href="https://github.com/ypd11/Blinq-Messenger/releases/download/v1.0.0/BlinqMessengerSetup-1.0.0.exe">
               <img src="assets/updates.png" alt="">
-              Windows download coming soon
+              Download for Windows
             </a>
             <a class="button disabled" href="#" aria-disabled="true">
               <img src="assets/send.png" alt="">
-              Android download coming soon
+              Android coming soon
             </a>
           </div>
-          <p class="note">Download links are placeholders until the final release pages are ready.</p>
+          <p class="note">Windows is available now. Android is in progress and will be released later.</p>
           <div class="hero-pills" aria-label="Blinq Messenger highlights">
             <span class="hero-pill">Internet Mode</span>
             <span class="hero-pill">LAN Mode</span>
@@ -746,16 +1067,51 @@
       </div>
     </section>
 
+    <section class="section" id="license">
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <h2>License and responsible use.</h2>
+            <p class="section-copy">This is the same license shown in Blinq Messenger and in the Windows installer.</p>
+          </div>
+        </div>
+        <div class="license-panel">
+          <h3>Blinq Messenger Freeware License</h3>
+          <p>Blinq Messenger is provided as freeware by Exe Innovate. You may use the application to communicate, share messages, send files, and use LAN or Internet chat features for personal or business work.</p>
+
+          <h3>Responsible use</h3>
+          <p>You are responsible for the messages, files, images, drawings, profile information, and other content you send or receive with the application. Do not use Blinq Messenger to harass, impersonate, distribute illegal content, invade privacy, violate workplace or school rules, or break any applicable law.</p>
+          <p>Exe Innovate is not responsible for how users choose to use the application, for content exchanged between users, or for consequences caused by misuse, unauthorized sharing, offensive messages, unsafe files, or communication with unintended recipients.</p>
+
+          <h3>Network, accounts, and privacy</h3>
+          <p>LAN Mode is designed for local-network communication and peer discovery. Users are responsible for choosing trusted networks, configuring firewall rules, and verifying who they communicate with.</p>
+          <p>Internet Mode uses a Blinq account and server connection to reach approved contacts outside the LAN. Users are responsible for protecting their account credentials, choosing contacts carefully, and following applicable rules for remote communication.</p>
+
+          <h3>Files and security</h3>
+          <p>Always be careful with files received from other users. Exe Innovate is not responsible for data loss, malware, unwanted files, disclosure of private information, or damage caused by files, images, links, or content exchanged through the app.</p>
+
+          <h3>Included components</h3>
+          <p>The application includes its own code and third-party components, including Qt libraries and interface resources. Those components remain subject to their respective licenses.</p>
+
+          <h3>No warranty</h3>
+          <p>The software is provided as-is, without warranty of any kind. Exe Innovate does not guarantee uninterrupted communication, message delivery, compatibility, security, or fitness for a particular purpose.</p>
+
+          <h3>Redistribution</h3>
+          <p>Redistribution is allowed only when the application remains unmodified and credited to Exe Innovate. Commercial resale, reverse branding, or claiming authorship is not permitted.</p>
+        </div>
+      </div>
+    </section>
+
     <section class="section" id="downloads">
       <div class="wrap">
         <div class="download-panel">
           <div>
-            <h2>Downloads will go here.</h2>
-            <p class="section-copy">When the release is ready, replace these placeholder buttons with the Windows installer and Android release links.</p>
+            <h2>Download Blinq Messenger.</h2>
+            <p class="section-copy">Get the Windows installer now. The Android version is still being prepared and will be added here when it is ready.</p>
           </div>
           <div class="download-actions">
-            <a class="button primary disabled" href="#" aria-disabled="true">Windows installer coming soon</a>
-            <a class="button disabled" href="#" aria-disabled="true">Android release coming soon</a>
+            <a class="button primary" href="https://github.com/ypd11/Blinq-Messenger/releases/download/v1.0.0/BlinqMessengerSetup-1.0.0.exe">Download Windows Installer</a>
+            <a class="button disabled" href="#" aria-disabled="true">Android Coming Soon</a>
           </div>
         </div>
       </div>
@@ -765,11 +1121,14 @@
   <footer>
     <div class="footer-inner">
       <span>Blinq Messenger by Exe Innovate</span>
-      <span>Downloads and release links coming soon.</span>
+      <span>Windows available now. Android coming soon.</span>
     </div>
   </footer>
 
   <dialog class="preview-modal" id="screenshot-modal">
+    <button class="modal-close" type="button" id="modal-close" aria-label="Close screenshot preview">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.3 5.71 12 12l6.3 6.29-1.41 1.41L10.59 13.41 4.29 19.71 2.88 18.3 9.17 12 2.88 5.71 4.29 4.29l6.3 6.3 6.3-6.3z"/></svg>
+    </button>
     <div class="modal-image-wrap">
       <img id="modal-image" src="" alt="">
     </div>
@@ -805,6 +1164,34 @@
 
     const modal = document.getElementById("screenshot-modal");
     const modalImage = document.getElementById("modal-image");
+    const modalClose = document.getElementById("modal-close");
+    const navToggle = document.getElementById("nav-toggle");
+    const navClose = document.getElementById("nav-close");
+    const navOverlay = document.getElementById("nav-overlay");
+    const navLinks = document.querySelectorAll("#site-nav a");
+
+    function setNavOpen(open) {
+      document.body.classList.toggle("nav-open", open);
+      navToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+
+    navToggle.addEventListener("click", () => {
+      setNavOpen(!document.body.classList.contains("nav-open"));
+    });
+
+    navOverlay.addEventListener("click", () => {
+      setNavOpen(false);
+    });
+
+    navClose.addEventListener("click", () => {
+      setNavOpen(false);
+    });
+
+    navLinks.forEach((link) => {
+      link.addEventListener("click", () => {
+        setNavOpen(false);
+      });
+    });
 
     function openPreview(src, alt) {
       modalImage.src = src;
@@ -848,6 +1235,16 @@
     modal.addEventListener("click", (event) => {
       if (event.target === modal || event.target.classList.contains("modal-image-wrap")) {
         modal.close();
+      }
+    });
+
+    modalClose.addEventListener("click", () => {
+      modal.close();
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        setNavOpen(false);
       }
     });
   </script>
