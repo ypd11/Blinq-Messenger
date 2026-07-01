@@ -15,6 +15,7 @@ const els = {
   loginForm: document.getElementById("login-form"),
   loginUsername: document.getElementById("login-username"),
   loginPassword: document.getElementById("login-password"),
+  signupButton: document.getElementById("signup-button"),
   authStatus: document.getElementById("auth-status"),
   connectionLabel: document.getElementById("connection-label"),
   topMenuButton: document.getElementById("top-menu-button"),
@@ -182,6 +183,13 @@ function send(objectValue) {
   }
   state.ws.send(JSON.stringify(objectValue));
   return true;
+}
+
+function sendWhenConnected(objectValue) {
+  connect();
+  const action = () => send(objectValue);
+  if (state.ws?.readyState === WebSocket.OPEN) action();
+  else state.ws?.addEventListener("open", action, { once: true });
 }
 
 function handleMessage(message) {
@@ -452,7 +460,9 @@ function showPromptModal({ title, message = "", fields = [], primary = "Save" })
     if (field.type === "select") {
       return `<label>${escapeHtml(field.label)}<select name="${escapeHtml(field.name)}">${field.options.map((option) => `<option value="${escapeHtml(option)}"${option === field.value ? " selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select></label>`;
     }
-    return `<label>${escapeHtml(field.label)}<input name="${escapeHtml(field.name)}" value="${escapeHtml(field.value || "")}" ${field.maxLength ? `maxlength="${field.maxLength}"` : ""}></label>`;
+    const type = field.type || "text";
+    const value = type === "password" ? "" : field.value || "";
+    return `<label>${escapeHtml(field.label)}<input type="${escapeHtml(type)}" name="${escapeHtml(field.name)}" value="${escapeHtml(value)}" ${field.maxLength ? `maxlength="${field.maxLength}"` : ""} ${field.autocomplete ? `autocomplete="${escapeHtml(field.autocomplete)}"` : ""}></label>`;
   }).join("");
   return new Promise((resolve) => {
     const closeHandler = () => {
@@ -476,6 +486,40 @@ async function editDisplayName() {
     fields: [{ label: "Name", name: "displayName", value: bestName(state.self), maxLength: 60 }]
   });
   if (result?.displayName?.trim()) updatePresence({ displayName: result.displayName.trim() });
+}
+
+async function signUpDialog() {
+  const result = await showPromptModal({
+    title: "Create Account",
+    message: "Choose your Blinq ID and profile name.",
+    fields: [
+      { label: "Blinq ID", name: "username", value: "", maxLength: 32, autocomplete: "username" },
+      { label: "Display name", name: "displayName", value: "", maxLength: 60 },
+      { label: "Password", name: "password", type: "password", autocomplete: "new-password" },
+      { label: "Confirm password", name: "confirmPassword", type: "password", autocomplete: "new-password" },
+      { label: "Recovery email (optional)", name: "email", type: "email", autocomplete: "email" }
+    ],
+    primary: "Create"
+  });
+  if (!result) return;
+  const username = normalizeBlinqId(result.username).replace("@blinqm.net", "");
+  const displayName = String(result.displayName || username).trim();
+  const password = String(result.password || "");
+  const confirmPassword = String(result.confirmPassword || "");
+  const email = String(result.email || "").trim();
+  if (!/^[a-z0-9._]{3,32}$/.test(username)) {
+    await showInfoModal("Create Account", "Use 3-32 lowercase letters, numbers, dots, or underscores for your Blinq ID.");
+    return;
+  }
+  if (password.length < 8) {
+    await showInfoModal("Create Account", "Password must be at least 8 characters.");
+    return;
+  }
+  if (password !== confirmPassword) {
+    await showInfoModal("Create Account", "Passwords do not match.");
+    return;
+  }
+  sendWhenConnected({ type: "signup", username, displayName, password, email });
 }
 
 async function addContactDialog() {
@@ -517,6 +561,19 @@ async function requestNotifications() {
   state.notificationsEnabled = permission === "granted";
   localStorage.setItem(STORAGE.notifications, state.notificationsEnabled ? "1" : "0");
   await showInfoModal("Notifications", state.notificationsEnabled ? "Browser notifications are enabled." : "Notifications were not enabled.");
+}
+
+async function showAbout() {
+  els.modalTitle.textContent = "About Blinq Messenger";
+  els.modalMessage.textContent = "Blinq Messenger is a light, friendly chat app for Internet Mode conversations, contacts, presence, and native app downloads.";
+  els.modalPrimary.textContent = "OK";
+  els.modalBody.innerHTML = `
+    <div class="about-links">
+      <span>Download the native Windows and Android apps from the main app page.</span>
+      <a href="https://blinqm.net/" target="_blank" rel="noopener">https://blinqm.net/</a>
+    </div>
+  `;
+  els.modal.showModal();
 }
 
 function maybeNotify(from, body) {
@@ -607,15 +664,14 @@ function toggleTopMenu(force) {
 
 els.loginForm.addEventListener("submit", (event) => {
   event.preventDefault();
-  connect();
-  const login = () => send({
+  sendWhenConnected({
     type: "login",
     username: normalizeBlinqId(els.loginUsername.value).replace("@blinqm.net", ""),
     password: els.loginPassword.value
   });
-  if (state.ws?.readyState === WebSocket.OPEN) login();
-  else state.ws?.addEventListener("open", login, { once: true });
 });
+
+els.signupButton.addEventListener("click", signUpDialog);
 
 els.topMenuButton.addEventListener("click", () => toggleTopMenu());
 
@@ -630,6 +686,7 @@ els.topMenu.addEventListener("click", async (event) => {
   if (action === "avatar") chooseAvatar();
   if (action === "notifications") requestNotifications();
   if (action === "blocked") manageBlockedUsers();
+  if (action === "about") showAbout();
   if (action === "signOut") {
     send({ type: "logout" });
     clearSession();
@@ -746,6 +803,12 @@ els.contactMenu.addEventListener("click", async (event) => {
 document.addEventListener("click", (event) => {
   if (!event.target.closest("#top-menu") && !event.target.closest("#top-menu-button")) toggleTopMenu(false);
   if (!event.target.closest("#contact-menu")) closeContactMenu();
+});
+
+els.modal.addEventListener("click", (event) => {
+  if (event.target === els.modal) {
+    els.modal.close("cancel");
+  }
 });
 
 els.backButton.addEventListener("click", () => {

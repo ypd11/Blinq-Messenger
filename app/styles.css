@@ -46,7 +46,7 @@ button {
   height: 100vh;
   height: 100dvh;
   margin: 0 auto;
-  padding: max(14px, env(safe-area-inset-top)) 14px max(14px, env(safe-area-inset-bottom));
+  padding: max(26px, calc(env(safe-area-inset-top) + 14px)) 14px max(14px, env(safe-area-inset-bottom));
   overflow: hidden;
 }
 
@@ -90,6 +90,15 @@ button {
   text-align: left;
 }
 
+.auth-link-button {
+  margin-top: 12px;
+  border: 0;
+  background: transparent;
+  color: var(--accent-dark);
+  font-weight: 500;
+  cursor: pointer;
+}
+
 label {
   display: grid;
   gap: 6px;
@@ -106,6 +115,11 @@ select {
   padding: 10px 12px;
   background: #ffffff;
   color: var(--ink);
+  font-weight: 400;
+}
+
+select option {
+  font-weight: 400;
 }
 
 input:focus,
@@ -561,7 +575,7 @@ select:focus {
 
 .chat-content {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   width: 100%;
   height: 100%;
   min-height: 0;
@@ -685,6 +699,16 @@ select:focus {
   gap: 10px;
 }
 
+.about-links {
+  display: grid;
+  gap: 8px;
+}
+
+.about-links a {
+  color: var(--accent-dark);
+  font-weight: 500;
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;
@@ -732,6 +756,14 @@ select:focus {
 
   .profile-panel {
     min-height: 118px;
+  }
+
+  .topbar {
+    min-height: 54px;
+  }
+
+  .chat-header {
+    padding-top: 2px;
   }
 
   .profile-text h2,
