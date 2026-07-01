@@ -52,7 +52,7 @@ button {
   height: 100vh;
   height: 100dvh;
   margin: 0 auto;
-  padding: max(18px, calc(env(safe-area-inset-top) + 10px)) 14px max(14px, env(safe-area-inset-bottom));
+  padding: max(8px, env(safe-area-inset-top)) 14px max(14px, env(safe-area-inset-bottom));
   overflow: hidden;
 }
 
@@ -313,7 +313,7 @@ select:focus {
   margin: 0;
   color: #0f172a;
   font-size: 23px;
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .text-link {
@@ -558,14 +558,15 @@ select:focus {
   height: 100%;
   min-height: 0;
   padding: 12px;
+  position: relative;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
 .empty-chat {
-  flex: 1 1 auto;
-  min-height: 0;
+  position: absolute;
+  inset: 12px;
   display: grid;
   place-items: center;
   align-content: center;
@@ -585,10 +586,12 @@ select:focus {
 }
 
 .chat-content {
-  flex: 1 1 auto;
+  position: absolute;
+  inset: 12px;
   display: flex;
   flex-direction: column;
   width: 100%;
+  width: auto;
   min-height: 0;
   overflow: hidden;
 }
@@ -847,7 +850,7 @@ button,
   .app-shell {
     padding-right: 10px;
     padding-left: 10px;
-    padding-top: max(22px, calc(env(safe-area-inset-top) + 10px));
+    padding-top: max(8px, env(safe-area-inset-top));
     height: 100dvh;
   }
 
