@@ -1,4 +1,4 @@
-const CACHE_NAME = "blinq-web-v7";
+const CACHE_NAME = "blinq-web-v9";
 const ASSETS = [
   "./",
   "index.html",
@@ -9,7 +9,8 @@ const ASSETS = [
   "icon-192.png",
   "icon-512.png",
   "../assets/appicon.ico",
-  "../assets/avatar_placeholder.png"
+  "../assets/avatar_placeholder.png",
+  "../assets/whistle.wav"
 ];
 
 self.addEventListener("install", (event) => {

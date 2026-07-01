@@ -69,6 +69,9 @@ const state = {
   notificationsEnabled: localStorage.getItem(STORAGE.notifications) === "1"
 };
 
+const whistleAudio = new Audio("../assets/whistle.wav");
+whistleAudio.preload = "auto";
+
 function loadJson(key, fallback) {
   try {
     return JSON.parse(localStorage.getItem(key) || "");
@@ -282,6 +285,9 @@ function handleMessage(message) {
     case "message":
       receiveChatMessage(message);
       break;
+    case "buzz":
+      receiveWhistle(message);
+      break;
     case "messageSent":
       markMessageSent(message.message);
       break;
@@ -416,7 +422,7 @@ function renderChat() {
   const status = peer.status || "Offline";
   const personalMessage = peer.personalMessage && status !== "Offline" ? peer.personalMessage : "";
   els.chatStatus.innerHTML = isOnline(peer)
-    ? `<span class="chat-status-text ${statusClass(status)}">${escapeHtml(status)}</span>${personalMessage ? `<span class="chat-message"> - ${escapeHtml(personalMessage)}</span>` : ""}<span class="chat-last-seen"> - Last seen now</span>`
+    ? `<span class="chat-status-line"><span class="chat-status-text ${statusClass(status)}">${escapeHtml(status)}</span>${personalMessage ? `<span class="chat-message"> - ${escapeHtml(personalMessage)}</span>` : ""}</span><span class="chat-last-seen">Last seen now</span>`
     : `<span class="chat-status-text">Offline</span>`;
   els.chatAvatar.src = avatarSrc(peer);
   const messages = state.messages[peer.id] || [];
@@ -463,6 +469,35 @@ function markMessageSent(sent) {
   const found = list.find((message) => message.id === sent.id);
   if (found) found.createdAt = sent.createdAt || found.createdAt;
   saveMessages();
+}
+
+function playWhistle() {
+  try {
+    whistleAudio.currentTime = 0;
+    const result = whistleAudio.play();
+    if (result?.catch) result.catch(() => {});
+  } catch {
+  }
+}
+
+function receiveWhistle(message) {
+  const from = message.fromUser || {};
+  upsertContact(from);
+  if (from.id && state.blocked.has(from.id)) return;
+  playWhistle();
+  setStatus(`${bestName(from)} whistled.`);
+  if (state.notificationsEnabled && "Notification" in window && Notification.permission === "granted" && document.visibilityState !== "visible") {
+    const notification = new Notification(bestName(from), {
+      body: "whistled at you",
+      icon: "../assets/appicon.ico",
+      tag: `blinq-whistle-${from.id || from.blinqId || "user"}`
+    });
+    notification.onclick = () => {
+      window.focus();
+      if (from.id) openChat(from.id);
+      notification.close();
+    };
+  }
 }
 
 function openChat(peerId) {
@@ -835,6 +870,10 @@ els.contactMenu.addEventListener("click", async (event) => {
   if (!action || !peer) return;
   closeContactMenu();
   if (action === "open") openChat(peer.id);
+  if (action === "whistle") {
+    playWhistle();
+    send({ type: "buzz", to: peer.blinqId });
+  }
   if (action === "block") {
     if (state.blocked.has(peer.id)) unblockPeer(peer.id);
     else blockPeer(peer);
