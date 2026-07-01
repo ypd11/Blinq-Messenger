@@ -77,6 +77,11 @@ const state = {
 const whistleAudio = new Audio("../assets/whistle.wav");
 whistleAudio.preload = "auto";
 
+function updateViewportSize() {
+  const height = window.visualViewport?.height || window.innerHeight;
+  document.documentElement.style.setProperty("--app-height", `${height}px`);
+}
+
 function loadJson(key, fallback) {
   try {
     return JSON.parse(localStorage.getItem(key) || "");
@@ -956,6 +961,11 @@ document.addEventListener("visibilitychange", () => {
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
 }
+
+updateViewportSize();
+window.addEventListener("resize", updateViewportSize);
+window.visualViewport?.addEventListener("resize", updateViewportSize);
+window.visualViewport?.addEventListener("scroll", updateViewportSize);
 
 if (state.token) {
   connect();

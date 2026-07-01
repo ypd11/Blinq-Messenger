@@ -10,6 +10,7 @@
   --orange: #d97706;
   --red: #dc2626;
   --panel-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+  --app-height: 100dvh;
 }
 
 * {
@@ -51,8 +52,9 @@ button {
   width: min(100%, 1180px);
   height: 100vh;
   height: 100dvh;
+  height: var(--app-height);
   margin: 0 auto;
-  padding: max(8px, env(safe-area-inset-top)) 14px max(14px, env(safe-area-inset-bottom));
+  padding: max(20px, env(safe-area-inset-top)) 14px max(14px, env(safe-area-inset-bottom));
   overflow: hidden;
 }
 
@@ -438,7 +440,7 @@ select:focus {
   border-radius: 7px;
   background: linear-gradient(180deg, #ffffff, #edf6ff);
   color: #0f2748;
-  font-weight: 700;
+  font-weight: 700 !important;
   text-align: left;
   cursor: pointer;
 }
@@ -493,7 +495,7 @@ select:focus {
 .contact-name {
   display: block;
   color: #111827;
-  font-weight: 700;
+  font-weight: 700 !important;
   font-size: 16px;
 }
 
@@ -509,7 +511,7 @@ select:focus {
 }
 
 .contact-status {
-  font-weight: 700;
+  font-weight: 700 !important;
 }
 
 .contact-separator,
@@ -772,7 +774,7 @@ textarea,
 .group-header,
 .contact-name,
 .contact-status {
-  font-weight: 700;
+  font-weight: 700 !important;
 }
 
 .modal-actions {
@@ -856,8 +858,8 @@ textarea,
   .app-shell {
     padding-right: 10px;
     padding-left: 10px;
-    padding-top: max(8px, env(safe-area-inset-top));
-    height: 100dvh;
+    padding-top: max(22px, env(safe-area-inset-top));
+    height: var(--app-height);
   }
 
   .auth-card {
