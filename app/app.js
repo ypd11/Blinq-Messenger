@@ -27,8 +27,6 @@ const els = {
   profileStatus: document.getElementById("profile-status"),
   profileEditButton: document.getElementById("profile-edit-button"),
   contactCount: document.getElementById("contact-count"),
-  addContactForm: document.getElementById("add-contact-form"),
-  addContactInput: document.getElementById("add-contact-input"),
   requestsList: document.getElementById("requests-list"),
   contactList: document.getElementById("contact-list"),
   contactsView: document.getElementById("contacts-view"),
@@ -335,12 +333,12 @@ function renderGroup(label, contacts) {
     row.type = "button";
     row.dataset.peerId = contact.id;
     const status = contact.status || "Offline";
-    const message = contact.personalMessage && status !== "Offline" ? ` - ${contact.personalMessage}` : "";
+    const message = contact.personalMessage && status !== "Offline" ? contact.personalMessage : "";
     row.innerHTML = `
       <span class="avatar-frame"><img src="${avatarSrc(contact)}" alt=""></span>
       <span class="contact-main">
         <span class="contact-name">${escapeHtml(bestName(contact))}</span>
-        <span class="contact-status ${statusClass(status)}">${escapeHtml(status + message)}</span>
+        <span class="contact-line"><span class="contact-status ${statusClass(status)}">${escapeHtml(status)}</span>${message ? `<span class="contact-message"> - ${escapeHtml(message)}</span>` : ""}</span>
         <span class="last-seen">${status === "Offline" ? "Last seen recently" : "Last seen now"}</span>
       </span>
       ${unread ? `<span class="unread-badge">${unread}</span>` : ""}
@@ -478,6 +476,16 @@ async function editDisplayName() {
   if (result?.displayName?.trim()) updatePresence({ displayName: result.displayName.trim() });
 }
 
+async function addContactDialog() {
+  const result = await showPromptModal({
+    title: "Add Contact",
+    fields: [{ label: "Blinq ID", name: "blinqId", value: "", maxLength: 80 }],
+    primary: "Add"
+  });
+  const value = result?.blinqId?.trim();
+  if (value) send({ type: "addContact", to: normalizeBlinqId(value) });
+}
+
 async function editPersonalMessage() {
   const result = await showPromptModal({
     title: "Personal Message",
@@ -613,6 +621,7 @@ els.topMenu.addEventListener("click", async (event) => {
   const action = event.target.closest("[data-menu-action]")?.dataset.menuAction;
   if (!action) return;
   toggleTopMenu(false);
+  if (action === "addContact") addContactDialog();
   if (action === "displayName") editDisplayName();
   if (action === "personalMessage") editPersonalMessage();
   if (action === "status") editStatus();
@@ -646,14 +655,6 @@ els.avatarInput.addEventListener("change", () => {
     els.avatarInput.value = "";
   };
   reader.readAsDataURL(file);
-});
-
-els.addContactForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  const value = els.addContactInput.value.trim();
-  if (!value) return;
-  send({ type: "addContact", to: normalizeBlinqId(value) });
-  els.addContactInput.value = "";
 });
 
 els.requestsList.addEventListener("click", (event) => {

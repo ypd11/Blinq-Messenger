@@ -48,6 +48,7 @@
       </header>
 
       <div class="top-menu hidden" id="top-menu">
+        <button type="button" data-menu-action="addContact">Add Contact</button>
         <button type="button" data-menu-action="displayName">Change Display Name</button>
         <button type="button" data-menu-action="personalMessage">Change Personal Message</button>
         <button type="button" data-menu-action="status">Change Status</button>
@@ -77,10 +78,6 @@
             <h2>Contacts</h2>
             <span id="contact-count">0 total</span>
           </div>
-          <form class="add-contact" id="add-contact-form">
-            <input id="add-contact-input" placeholder="Add Blinq ID">
-            <button type="submit">Add</button>
-          </form>
           <div id="requests-list" class="requests-list"></div>
           <div class="contact-panel" id="contact-list"></div>
         </section>
