@@ -121,6 +121,7 @@ select {
   padding: 10px 12px;
   background: #ffffff;
   color: var(--ink);
+  font-size: 16px;
   font-weight: 400;
 }
 
@@ -437,7 +438,7 @@ select:focus {
   border-radius: 7px;
   background: linear-gradient(180deg, #ffffff, #edf6ff);
   color: #0f2748;
-  font-weight: 500;
+  font-weight: 700;
   text-align: left;
   cursor: pointer;
 }
@@ -492,7 +493,7 @@ select:focus {
 .contact-name {
   display: block;
   color: #111827;
-  font-weight: 500;
+  font-weight: 700;
   font-size: 16px;
 }
 
@@ -508,7 +509,7 @@ select:focus {
 }
 
 .contact-status {
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .contact-separator,
@@ -762,11 +763,16 @@ input,
 select,
 option,
 textarea,
-button,
 .top-menu button,
 .contact-menu button,
 .modal-card button {
   font-weight: 400;
+}
+
+.group-header,
+.contact-name,
+.contact-status {
+  font-weight: 700;
 }
 
 .modal-actions {
@@ -878,7 +884,8 @@ button,
 
   .content-grid {
     display: block;
-    height: 100%;
+    flex: 1 1 auto;
+    height: auto;
     min-height: 0;
   }
 
@@ -919,6 +926,7 @@ button,
   .chat-content {
     height: 100%;
     min-height: 0;
+    inset: 10px 10px max(18px, env(safe-area-inset-bottom)) 10px;
   }
 
   .message-list {
