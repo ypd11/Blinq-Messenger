@@ -1,10 +1,11 @@
-const CACHE_NAME = "blinq-web-v5";
+const CACHE_NAME = "blinq-web-v6";
 const ASSETS = [
   "./",
   "index.html",
   "styles.css",
   "app.js",
   "manifest.webmanifest",
+  "icon-180.png",
   "icon-192.png",
   "icon-512.png",
   "../assets/appicon.ico",

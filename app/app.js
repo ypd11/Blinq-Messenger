@@ -319,8 +319,8 @@ function renderContacts() {
   const offline = contacts.filter((contact) => !isOnline(contact));
   els.contactCount.textContent = `${contacts.length} total`;
   els.contactList.innerHTML = "";
-  renderGroup("Online", online);
-  renderGroup("Offline", offline);
+  if (online.length) renderGroup("Online", online);
+  if (offline.length) renderGroup("Offline", offline);
 }
 
 function renderGroup(label, contacts) {
@@ -364,7 +364,11 @@ function renderChat() {
   els.chatContent.classList.toggle("hidden", !peer);
   if (!peer) return;
   els.chatName.textContent = bestName(peer);
-  els.chatStatus.textContent = isOnline(peer) ? `${peer.status || "Available"} - Last seen now` : "Offline";
+  const status = peer.status || "Offline";
+  const personalMessage = peer.personalMessage && status !== "Offline" ? peer.personalMessage : "";
+  els.chatStatus.innerHTML = isOnline(peer)
+    ? `<span class="chat-status-text ${statusClass(status)}">${escapeHtml(status)}</span>${personalMessage ? `<span class="chat-message"> - ${escapeHtml(personalMessage)}</span>` : ""}<span class="chat-last-seen"> - Last seen now</span>`
+    : `<span class="chat-status-text">Offline</span>`;
   els.chatAvatar.src = avatarSrc(peer);
   const messages = state.messages[peer.id] || [];
   els.messageList.innerHTML = messages.map((message) => `
