@@ -94,7 +94,7 @@ label {
   display: grid;
   gap: 6px;
   color: #334155;
-  font-weight: 750;
+  font-weight: 500;
 }
 
 input,
@@ -120,7 +120,7 @@ select:focus {
   border-radius: 8px;
   background: linear-gradient(180deg, #66c6ff, var(--accent));
   color: #ffffff;
-  font-weight: 750;
+  font-weight: 650;
   cursor: pointer;
 }
 
@@ -145,7 +145,7 @@ select:focus {
 
 .status-line {
   min-height: 20px;
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .main-view {
@@ -179,7 +179,7 @@ select:focus {
 .topbar-title strong {
   display: block;
   font-size: 19px;
-  font-weight: 700;
+  font-weight: 650;
   color: #082f49;
 }
 
@@ -291,7 +291,7 @@ select:focus {
   margin: 0;
   color: #0f172a;
   font-size: 23px;
-  font-weight: 700;
+  font-weight: 650;
 }
 
 .text-link {
@@ -359,7 +359,7 @@ select:focus {
 .section-title span {
   color: var(--muted);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .requests-list {
@@ -381,6 +381,7 @@ select:focus {
 .request-card strong {
   display: block;
   margin-bottom: 8px;
+  font-weight: 600;
 }
 
 .request-actions {
@@ -442,6 +443,12 @@ select:focus {
   color: inherit;
   text-align: left;
   cursor: pointer;
+  user-select: none;
+}
+
+.contact-row:focus-visible {
+  outline: 2px solid rgba(29, 155, 240, 0.3);
+  outline-offset: -2px;
 }
 
 .contact-row.selected,
@@ -462,7 +469,7 @@ select:focus {
 .contact-name {
   display: block;
   color: #111827;
-  font-weight: 700;
+  font-weight: 650;
   font-size: 16px;
 }
 
@@ -478,12 +485,13 @@ select:focus {
 }
 
 .contact-status {
-  font-weight: 650;
+  font-weight: 600;
 }
 
+.contact-separator,
 .contact-message {
-  color: var(--muted);
-  font-weight: 400;
+  color: var(--muted) !important;
+  font-weight: 400 !important;
 }
 
 .contact-status.available {
@@ -597,7 +605,7 @@ select:focus {
 .message-meta {
   color: var(--accent-dark);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 650;
 }
 
 .message-time {
@@ -661,6 +669,15 @@ select:focus {
 .modal-card h2 {
   color: #0f2748;
   font-size: 22px;
+  font-weight: 600;
+}
+
+.modal-card label {
+  font-weight: 500;
+}
+
+.modal-card strong {
+  font-weight: 600;
 }
 
 #modal-body {

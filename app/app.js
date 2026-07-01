@@ -59,6 +59,7 @@ const state = {
   requests: [],
   selectedPeerId: "",
   menuPeerId: "",
+  suppressNextContactClick: false,
   messages: loadJson(STORAGE.messages, {}),
   unread: new Map(),
   collapsedGroups: new Set(loadJson(STORAGE.groups, [])),
@@ -328,9 +329,10 @@ function renderGroup(label, contacts) {
   if (isCollapsed) return;
   for (const contact of contacts) {
     const unread = state.unread.get(contact.id) || 0;
-    const row = document.createElement("button");
+    const row = document.createElement("div");
     row.className = `contact-row${state.selectedPeerId === contact.id ? " selected" : ""}`;
-    row.type = "button";
+    row.setAttribute("role", "button");
+    row.tabIndex = 0;
     row.dataset.peerId = contact.id;
     const status = contact.status || "Offline";
     const message = contact.personalMessage && status !== "Offline" ? contact.personalMessage : "";
@@ -338,7 +340,7 @@ function renderGroup(label, contacts) {
       <span class="avatar-frame"><img src="${avatarSrc(contact)}" alt=""></span>
       <span class="contact-main">
         <span class="contact-name">${escapeHtml(bestName(contact))}</span>
-        <span class="contact-line"><span class="contact-status ${statusClass(status)}">${escapeHtml(status)}</span>${message ? `<span class="contact-message"> - ${escapeHtml(message)}</span>` : ""}</span>
+        <span class="contact-line"><span class="contact-status ${statusClass(status)}">${escapeHtml(status)}</span>${message ? `<span class="contact-separator"> - </span><span class="contact-message">${escapeHtml(message)}</span>` : ""}</span>
         <span class="last-seen">${status === "Offline" ? "Last seen recently" : "Last seen now"}</span>
       </span>
       ${unread ? `<span class="unread-badge">${unread}</span>` : ""}
@@ -665,6 +667,12 @@ els.requestsList.addEventListener("click", (event) => {
 });
 
 els.contactList.addEventListener("click", (event) => {
+  if (state.suppressNextContactClick) {
+    state.suppressNextContactClick = false;
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
   const group = event.target.closest("[data-group]");
   if (group) {
     const label = group.dataset.group;
@@ -678,10 +686,19 @@ els.contactList.addEventListener("click", (event) => {
   if (row) openChat(row.dataset.peerId);
 });
 
+els.contactList.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const row = event.target.closest("[data-peer-id]");
+  if (!row) return;
+  event.preventDefault();
+  openChat(row.dataset.peerId);
+});
+
 els.contactList.addEventListener("contextmenu", (event) => {
   const row = event.target.closest("[data-peer-id]");
   if (!row) return;
   event.preventDefault();
+  event.stopPropagation();
   openContactMenu(row.dataset.peerId, event.clientX, event.clientY);
 });
 
@@ -690,6 +707,7 @@ els.contactList.addEventListener("touchstart", (event) => {
   if (!row) return;
   row._longPressTimer = window.setTimeout(() => {
     const touch = event.touches[0];
+    state.suppressNextContactClick = true;
     openContactMenu(row.dataset.peerId, touch.clientX, touch.clientY);
   }, 520);
 }, { passive: true });
