@@ -48,7 +48,11 @@ const els = {
   modalMessage: document.getElementById("modal-message"),
   modalBody: document.getElementById("modal-body"),
   modalPrimary: document.getElementById("modal-primary"),
-  avatarInput: document.getElementById("avatar-input")
+  avatarInput: document.getElementById("avatar-input"),
+  whistleToast: document.getElementById("whistle-toast"),
+  whistleTitle: document.getElementById("whistle-title"),
+  whistleMessage: document.getElementById("whistle-message"),
+  whistleClose: document.getElementById("whistle-close")
 };
 
 const state = {
@@ -66,6 +70,7 @@ const state = {
   collapsedGroups: new Set(loadJson(STORAGE.groups, [])),
   blocked: new Set(),
   blockedInfo: {},
+  whistleTimer: 0,
   notificationsEnabled: localStorage.getItem(STORAGE.notifications) === "1"
 };
 
@@ -485,7 +490,7 @@ function receiveWhistle(message) {
   upsertContact(from);
   if (from.id && state.blocked.has(from.id)) return;
   playWhistle();
-  setStatus(`${bestName(from)} whistled.`);
+  showWhistleToast(bestName(from));
   if (state.notificationsEnabled && "Notification" in window && Notification.permission === "granted" && document.visibilityState !== "visible") {
     const notification = new Notification(bestName(from), {
       body: "whistled at you",
@@ -498,6 +503,19 @@ function receiveWhistle(message) {
       notification.close();
     };
   }
+}
+
+function showWhistleToast(name) {
+  clearTimeout(state.whistleTimer);
+  els.whistleTitle.textContent = "Whistle";
+  els.whistleMessage.textContent = `${name} whistled.`;
+  els.whistleToast.classList.remove("hidden");
+  state.whistleTimer = window.setTimeout(hideWhistleToast, 6000);
+}
+
+function hideWhistleToast() {
+  clearTimeout(state.whistleTimer);
+  els.whistleToast.classList.add("hidden");
 }
 
 function openChat(peerId) {
@@ -785,6 +803,7 @@ els.profileEditButton.addEventListener("click", editDisplayName);
 els.profileMessageButton.addEventListener("click", editPersonalMessage);
 els.profileStatusButton.addEventListener("click", editStatus);
 els.profileAvatarButton.addEventListener("click", chooseAvatar);
+els.whistleClose.addEventListener("click", hideWhistleToast);
 
 els.avatarInput.addEventListener("change", () => {
   const file = els.avatarInput.files?.[0];

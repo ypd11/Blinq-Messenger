@@ -16,8 +16,14 @@
   box-sizing: border-box;
 }
 
+html {
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   margin: 0;
+  height: 100%;
   min-height: 100vh;
   overflow: hidden;
   color: var(--ink);
@@ -46,7 +52,7 @@ button {
   height: 100vh;
   height: 100dvh;
   margin: 0 auto;
-  padding: max(32px, calc(env(safe-area-inset-top) + 18px)) 14px max(14px, env(safe-area-inset-bottom));
+  padding: max(18px, calc(env(safe-area-inset-top) + 10px)) 14px max(14px, env(safe-area-inset-bottom));
   overflow: hidden;
 }
 
@@ -580,10 +586,9 @@ select:focus {
 
 .chat-content {
   flex: 1 1 auto;
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   width: 100%;
-  height: 100%;
   min-height: 0;
   overflow: hidden;
 }
@@ -628,6 +633,7 @@ select:focus {
 }
 
 .message-list {
+  flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
   padding: 14px 4px;
@@ -667,6 +673,7 @@ select:focus {
 }
 
 .composer {
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: 1fr 48px;
   align-items: center;
@@ -793,12 +800,55 @@ button,
   font-size: 12px;
 }
 
+.whistle-toast {
+  position: fixed;
+  z-index: 80;
+  right: 18px;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  width: min(360px, calc(100vw - 36px));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #b9d7f2;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.2);
+}
+
+.whistle-toast strong,
+.whistle-toast span {
+  display: block;
+}
+
+.whistle-toast strong {
+  color: #0f2748;
+  font-weight: 600;
+}
+
+.whistle-toast span {
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.whistle-toast button {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  background: transparent;
+  color: #0f2748;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
 @media (max-width: 780px) {
   .app-shell {
     padding-right: 10px;
     padding-left: 10px;
-    padding-top: max(58px, calc(env(safe-area-inset-top) + 36px));
-    height: 100svh;
+    padding-top: max(22px, calc(env(safe-area-inset-top) + 10px));
+    height: 100dvh;
   }
 
   .auth-card {
