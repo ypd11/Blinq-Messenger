@@ -29,7 +29,7 @@
         </label>
         <button class="primary-button" type="submit">Sign In</button>
       </form>
-      <p class="auth-note">This first web version supports Internet Mode private chat. LAN Mode, images, drawings, and rich editor tools stay in the desktop and Android apps for now.</p>
+      <p class="auth-note">This web version supports Internet Mode private chat, contacts, presence, and browser notifications.</p>
       <p class="status-line" id="auth-status"></p>
     </section>
 
@@ -42,59 +42,101 @@
             <span id="connection-label">Disconnected</span>
           </div>
         </div>
-        <button class="icon-button" id="sign-out-button" type="button" aria-label="Sign out">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.09 15.59 11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67zM19 3H9c-1.1 0-2 .9-2 2v4h2V5h10v14H9v-4H7v4c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2"/></svg>
+        <button class="icon-button" id="top-menu-button" type="button" aria-label="Open menu" aria-expanded="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2m0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2m0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2"/></svg>
         </button>
       </header>
 
+      <div class="top-menu hidden" id="top-menu">
+        <button type="button" data-menu-action="displayName">Change Display Name</button>
+        <button type="button" data-menu-action="personalMessage">Change Personal Message</button>
+        <button type="button" data-menu-action="status">Change Status</button>
+        <button type="button" data-menu-action="avatar">Change Avatar</button>
+        <button type="button" data-menu-action="notifications">Enable Notifications</button>
+        <button type="button" data-menu-action="blocked">Manage Blocked Users</button>
+        <button type="button" data-menu-action="signOut">Sign Out</button>
+      </div>
+
       <section class="profile-panel">
-        <div class="avatar-frame">
+        <button class="avatar-frame avatar-button" id="profile-avatar-button" type="button" aria-label="Change avatar">
           <img id="profile-avatar" src="../assets/avatar_placeholder.png" alt="">
-        </div>
+        </button>
         <div class="profile-text">
           <h2 id="profile-name">Blinq User</h2>
-          <p id="profile-message">Hi, let's chat!</p>
-          <div class="status-dot-row"><span class="status-dot"></span><strong id="profile-status">Available</strong></div>
+          <button class="text-link" id="profile-message-button" type="button">Hi, let's chat!</button>
+          <button class="status-dot-row" id="profile-status-button" type="button"><span class="status-dot"></span><strong id="profile-status">Available</strong></button>
         </div>
-      </section>
-
-      <section class="contacts-view" id="contacts-view">
-        <div class="section-title">
-          <h2>Contacts</h2>
-          <span id="contact-count">0 total</span>
-        </div>
-        <form class="add-contact" id="add-contact-form">
-          <input id="add-contact-input" placeholder="Add Blinq ID">
-          <button type="submit">Add</button>
-        </form>
-        <div id="requests-list" class="requests-list"></div>
-        <div class="contact-panel" id="contact-list"></div>
-      </section>
-
-      <section class="chat-view hidden" id="chat-view">
-        <button class="back-button" id="back-button" type="button">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.42-1.41L7.83 13H20z"/></svg>
-          Contacts
+        <button class="profile-edit" id="profile-edit-button" type="button" aria-label="Edit profile">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75zm17.71-10.04a1 1 0 0 0 0-1.41l-2.51-2.51a1 1 0 0 0-1.41 0l-1.96 1.96 3.75 3.75z"/></svg>
         </button>
-        <div class="chat-header">
-          <div class="avatar-frame small">
-            <img id="chat-avatar" src="../assets/avatar_placeholder.png" alt="">
-          </div>
-          <div>
-            <h2 id="chat-name">Contact</h2>
-            <p id="chat-status">Offline</p>
-          </div>
-        </div>
-        <div class="message-list" id="message-list"></div>
-        <form class="composer" id="message-form">
-          <input id="message-input" placeholder="Message" autocomplete="off">
-          <button class="send-button" type="submit" aria-label="Send message">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 21 23 12 2 3v7l15 2-15 2z"/></svg>
-          </button>
-        </form>
       </section>
+
+      <div class="content-grid">
+        <section class="contacts-view" id="contacts-view">
+          <div class="section-title">
+            <h2>Contacts</h2>
+            <span id="contact-count">0 total</span>
+          </div>
+          <form class="add-contact" id="add-contact-form">
+            <input id="add-contact-input" placeholder="Add Blinq ID">
+            <button type="submit">Add</button>
+          </form>
+          <div id="requests-list" class="requests-list"></div>
+          <div class="contact-panel" id="contact-list"></div>
+        </section>
+
+        <section class="chat-view" id="chat-view">
+          <div class="empty-chat" id="empty-chat">
+            <img src="../assets/appicon.ico" alt="">
+            <strong>Select a contact</strong>
+            <span>Open a chat to start messaging.</span>
+          </div>
+          <div class="chat-content hidden" id="chat-content">
+            <button class="back-button" id="back-button" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.42-1.41L7.83 13H20z"/></svg>
+              Contacts
+            </button>
+            <div class="chat-header">
+              <div class="avatar-frame small">
+                <img id="chat-avatar" src="../assets/avatar_placeholder.png" alt="">
+              </div>
+              <div>
+                <h2 id="chat-name">Contact</h2>
+                <p id="chat-status">Offline</p>
+              </div>
+            </div>
+            <div class="message-list" id="message-list"></div>
+            <form class="composer" id="message-form">
+              <input id="message-input" placeholder="Message" autocomplete="off">
+              <button class="send-button" type="submit" aria-label="Send message">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 21 23 12 2 3v7l15 2-15 2z"/></svg>
+              </button>
+            </form>
+          </div>
+        </section>
+      </div>
     </section>
   </main>
+
+  <div class="contact-menu hidden" id="contact-menu" role="menu">
+    <button type="button" data-contact-action="open">Open Chat</button>
+    <button type="button" data-contact-action="block">Block User</button>
+    <button type="button" data-contact-action="delete">Delete Contact</button>
+  </div>
+
+  <dialog class="modal" id="simple-modal">
+    <form method="dialog" class="modal-card" id="modal-form">
+      <h2 id="modal-title">Blinq Messenger</h2>
+      <p id="modal-message"></p>
+      <div id="modal-body"></div>
+      <div class="modal-actions">
+        <button class="secondary-button" value="cancel" type="submit">Cancel</button>
+        <button class="primary-button" id="modal-primary" value="default" type="submit">OK</button>
+      </div>
+    </form>
+  </dialog>
+
+  <input class="hidden" id="avatar-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
 
   <script src="app.js"></script>
 </body>
