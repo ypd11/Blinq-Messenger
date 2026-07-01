@@ -14,7 +14,14 @@
 </head>
 <body>
   <main class="app-shell">
-    <section class="auth-card" id="auth-view">
+    <section class="auth-card loading-card" id="loading-view">
+      <img class="auth-icon" src="../assets/appicon.ico" alt="">
+      <h1>Blinq Messenger</h1>
+      <p>Getting your chats ready...</p>
+      <p class="status-line">Connecting...</p>
+    </section>
+
+    <section class="auth-card hidden" id="auth-view">
       <img class="auth-icon" src="../assets/appicon.ico" alt="">
       <h1>Blinq Messenger</h1>
       <p>Stay close with simple, friendly chat anywhere.</p>
@@ -53,6 +60,7 @@
         <button type="button" data-menu-action="displayName">Change Display Name</button>
         <button type="button" data-menu-action="personalMessage">Change Personal Message</button>
         <button type="button" data-menu-action="status">Change Status</button>
+        <button type="button" data-menu-action="theme">Change Theme</button>
         <button type="button" data-menu-action="avatar">Change Avatar</button>
         <button type="button" data-menu-action="notifications">Enable Notifications</button>
         <button type="button" data-menu-action="blocked">Manage Blocked Users</button>
@@ -128,7 +136,7 @@
       <strong id="whistle-title">Whistle</strong>
       <span id="whistle-message">Someone whistled.</span>
     </div>
-    <button id="whistle-close" type="button" aria-label="Dismiss whistle">×</button>
+    <button id="whistle-close" type="button" aria-label="Dismiss whistle">x</button>
   </div>
 
   <dialog class="modal" id="simple-modal">

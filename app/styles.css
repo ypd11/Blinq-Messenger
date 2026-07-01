@@ -1,6 +1,10 @@
 :root {
   --accent: #1d9bf0;
   --accent-dark: #0f6fb8;
+  --window: #eef5ff;
+  --panel-top: #ffffff;
+  --panel-bottom: #c9ecff;
+  --panel-border: #7dbde5;
   --soft: #eaf7ff;
   --selected: #bde3ff;
   --line: #c7dff2;
@@ -31,7 +35,7 @@ body {
   font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
   background:
     radial-gradient(circle at top left, rgba(29, 155, 240, 0.18), transparent 34%),
-    linear-gradient(180deg, #ffffff 0, #eef5ff 52%, #ffffff 100%);
+    linear-gradient(180deg, #ffffff 0, var(--window) 52%, #ffffff 100%);
 }
 
 button,
@@ -74,6 +78,12 @@ button {
   margin: 36px auto 0;
   padding: 24px;
   text-align: center;
+}
+
+.loading-card {
+  display: grid;
+  place-items: center;
+  gap: 6px;
 }
 
 .auth-icon {
@@ -279,17 +289,20 @@ select:focus {
   gap: 12px;
   min-height: 132px;
   padding: 12px;
-  background: linear-gradient(180deg, #ffffff, #c9ecff 58%, #eaf7ff);
+  border-color: var(--panel-border);
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bottom) 58%, var(--soft));
 }
 
 .avatar-frame {
+  --frame-accent: var(--accent);
+  --frame-soft: var(--selected);
   width: 66px;
   height: 66px;
   flex: 0 0 auto;
   padding: 4px;
-  border: 1px solid var(--accent-dark);
+  border: 1px solid var(--frame-accent);
   border-radius: 10px;
-  background: linear-gradient(135deg, #ffffff, #9bd7ff, var(--accent));
+  background: linear-gradient(135deg, #ffffff, var(--frame-soft), var(--frame-accent));
 }
 
 .avatar-frame.small {
@@ -402,6 +415,43 @@ select:focus {
   border: 1px solid #bfdbfe;
   border-radius: 8px;
   background: #ffffff;
+}
+
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 8px;
+}
+
+.theme-choice {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f2748;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.theme-choice:hover {
+  background: var(--soft);
+}
+
+.theme-choice.active {
+  border-color: var(--accent);
+  background: var(--soft);
+}
+
+.theme-swatch {
+  width: 22px;
+  height: 22px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 999px;
+  background: var(--swatch);
 }
 
 .request-card strong {
@@ -855,10 +905,16 @@ textarea,
 }
 
 @media (max-width: 780px) {
+  body {
+    background: var(--window);
+  }
+
   .app-shell {
     padding-right: 10px;
     padding-left: 10px;
-    padding-top: max(22px, env(safe-area-inset-top));
+    padding-top: max(30px, calc(env(safe-area-inset-top) + 10px));
+    padding-bottom: 0;
+    background: var(--window);
     height: var(--app-height);
   }
 
@@ -928,7 +984,7 @@ textarea,
   .chat-content {
     height: 100%;
     min-height: 0;
-    inset: 10px 10px max(18px, env(safe-area-inset-bottom)) 10px;
+    inset: 10px 10px max(72px, calc(env(safe-area-inset-bottom) + 18px)) 10px;
   }
 
   .message-list {

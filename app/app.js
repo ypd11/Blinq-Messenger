@@ -6,10 +6,12 @@ const STORAGE = {
   token: "blinq.web.token",
   messages: "blinq.web.messages",
   groups: "blinq.web.groups",
-  notifications: "blinq.web.notifications"
+  notifications: "blinq.web.notifications",
+  theme: "blinq.web.theme"
 };
 
 const els = {
+  loadingView: document.getElementById("loading-view"),
   authView: document.getElementById("auth-view"),
   mainView: document.getElementById("main-view"),
   loginForm: document.getElementById("login-form"),
@@ -77,9 +79,64 @@ const state = {
 const whistleAudio = new Audio("../assets/whistle.wav");
 whistleAudio.preload = "auto";
 
+const THEMES = [
+  { key: "msnBlue", label: "Sky", window: "#eef5ff", panelTop: "#ffffff", panelBottom: "#c9ecff", panelBorder: "#7dbde5", accent: "#1d9bf0", accentDark: "#0f6fb8", hover: "#dff2ff", selected: "#bde3ff", soft: "#eaf7ff" },
+  { key: "aqua", label: "Aqua", window: "#eefbf8", panelTop: "#ffffff", panelBottom: "#bff4e8", panelBorder: "#74d5c3", accent: "#0f9f8f", accentDark: "#0f766e", hover: "#dcfdf7", selected: "#a7f3df", soft: "#ebfffb" },
+  { key: "mint", label: "Mint", window: "#f1fbf4", panelTop: "#ffffff", panelBottom: "#c9f3d6", panelBorder: "#7fd59c", accent: "#22a45a", accentDark: "#166534", hover: "#e3fbea", selected: "#bbf7d0", soft: "#f0fdf4" },
+  { key: "rose", label: "Rose", window: "#fff1f5", panelTop: "#ffffff", panelBottom: "#ffd1dc", panelBorder: "#f7a3b8", accent: "#e11d48", accentDark: "#9f1239", hover: "#ffe4e6", selected: "#fecdd3", soft: "#fff5f7" },
+  { key: "sunset", label: "Sunset", window: "#fff6ed", panelTop: "#ffffff", panelBottom: "#ffd6a8", panelBorder: "#f5a65b", accent: "#f97316", accentDark: "#c2410c", hover: "#ffedd5", selected: "#fed7aa", soft: "#fff7ed" },
+  { key: "violet", label: "Violet", window: "#f7f2ff", panelTop: "#ffffff", panelBottom: "#dec7ff", panelBorder: "#b897f1", accent: "#7c3aed", accentDark: "#5b21b6", hover: "#ede9fe", selected: "#ddd6fe", soft: "#faf5ff" },
+  { key: "orchid", label: "Orchid", window: "#fdf4ff", panelTop: "#ffffff", panelBottom: "#f5d0fe", panelBorder: "#d8a8e8", accent: "#c026d3", accentDark: "#86198f", hover: "#fae8ff", selected: "#f0abfc", soft: "#fdf4ff" },
+  { key: "ruby", label: "Ruby", window: "#fff5f5", panelTop: "#ffffff", panelBottom: "#fecaca", panelBorder: "#f87171", accent: "#dc2626", accentDark: "#991b1b", hover: "#fee2e2", selected: "#fecaca", soft: "#fff7f7" },
+  { key: "midnight", label: "Midnight", window: "#eef2ff", panelTop: "#ffffff", panelBottom: "#c7d2fe", panelBorder: "#93a3dc", accent: "#4338ca", accentDark: "#312e81", hover: "#e0e7ff", selected: "#c7d2fe", soft: "#f5f7ff" },
+  { key: "graphite", label: "Graphite", window: "#f2f5f8", panelTop: "#ffffff", panelBottom: "#d7dee8", panelBorder: "#a8b4c4", accent: "#475569", accentDark: "#1f2937", hover: "#e2e8f0", selected: "#cbd5e1", soft: "#f8fafc" }
+];
+
 function updateViewportSize() {
   const height = window.visualViewport?.height || window.innerHeight;
   document.documentElement.style.setProperty("--app-height", `${height}px`);
+}
+
+function isHexColor(value) {
+  return /^#[0-9a-f]{6}$/i.test(String(value || ""));
+}
+
+function themeForColor(color) {
+  const normalized = String(color || "").toLowerCase();
+  return THEMES.find((theme) => theme.accent.toLowerCase() === normalized) || THEMES[0];
+}
+
+function currentTheme() {
+  return themeForColor(state.self?.themeColor || localStorage.getItem(STORAGE.theme));
+}
+
+function applyTheme(theme) {
+  const active = theme || currentTheme();
+  const root = document.documentElement;
+  root.style.setProperty("--accent", active.accent);
+  root.style.setProperty("--accent-dark", active.accentDark);
+  root.style.setProperty("--window", active.window);
+  root.style.setProperty("--panel-top", active.panelTop);
+  root.style.setProperty("--panel-bottom", active.panelBottom);
+  root.style.setProperty("--panel-border", active.panelBorder);
+  root.style.setProperty("--soft", active.soft);
+  root.style.setProperty("--selected", active.selected);
+  root.style.setProperty("--line", active.panelBorder);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", active.accent);
+}
+
+function frameColor(user) {
+  return isHexColor(user?.themeColor) ? user.themeColor : "";
+}
+
+function frameStyleAttr(user) {
+  const color = frameColor(user);
+  return color ? ` style="--frame-accent:${escapeHtml(color)}"` : "";
+}
+
+function setFrameTheme(element, user) {
+  const color = frameColor(user) || currentTheme().accent;
+  element?.style.setProperty("--frame-accent", color);
 }
 
 function loadJson(key, fallback) {
@@ -260,6 +317,8 @@ function handleMessage(message) {
       state.token = message.token || state.token;
       localStorage.setItem(STORAGE.token, state.token);
       state.self = message.user;
+      if (isHexColor(state.self?.themeColor)) localStorage.setItem(STORAGE.theme, state.self.themeColor);
+      applyTheme();
       state.contacts = message.contacts || [];
       state.requests = message.contactRequests || [];
       loadAccountState();
@@ -282,6 +341,8 @@ function handleMessage(message) {
     case "presenceSet":
       if (message.user?.id === state.self?.id) {
         state.self = { ...state.self, ...message.user };
+        if (isHexColor(state.self.themeColor)) localStorage.setItem(STORAGE.theme, state.self.themeColor);
+        applyTheme();
         renderProfile();
       } else {
         upsertContact(message.user);
@@ -313,6 +374,10 @@ function handleMessage(message) {
       clearSession();
       break;
     case "error":
+      if (message.code === "bad_session" || message.code === "auth_required") {
+        clearSession();
+        return;
+      }
       setStatus(message.message || "Server error.", true);
       break;
   }
@@ -326,13 +391,21 @@ function upsertContact(user) {
 }
 
 function showMain() {
+  els.loadingView.classList.add("hidden");
   els.authView.classList.add("hidden");
   els.mainView.classList.remove("hidden");
 }
 
 function showAuth() {
+  els.loadingView.classList.add("hidden");
   els.mainView.classList.add("hidden");
   els.authView.classList.remove("hidden");
+}
+
+function showLoading() {
+  els.authView.classList.add("hidden");
+  els.mainView.classList.add("hidden");
+  els.loadingView.classList.remove("hidden");
 }
 
 function renderAll() {
@@ -348,6 +421,7 @@ function renderProfile() {
   els.profileMessageButton.textContent = state.self.personalMessage || "Hi, let's chat!";
   els.profileStatus.textContent = state.self.status || "Available";
   els.profileAvatar.src = avatarSrc(state.self);
+  setFrameTheme(els.profileAvatarButton, state.self);
 }
 
 function renderRequests() {
@@ -410,7 +484,7 @@ function renderGroup(label, contacts) {
     const status = contact.status || "Offline";
     const message = contact.personalMessage && status !== "Offline" ? contact.personalMessage : "";
     row.innerHTML = `
-      <span class="avatar-frame"><img src="${avatarSrc(contact)}" alt=""></span>
+      <span class="avatar-frame"${frameStyleAttr(contact)}><img src="${avatarSrc(contact)}" alt=""></span>
       <span class="contact-main">
         <span class="contact-name">${escapeHtml(bestName(contact))}</span>
         <span class="contact-line"><span class="contact-status ${statusClass(status)}">${escapeHtml(status)}</span>${message ? `<span class="contact-separator"> - </span><span class="contact-message">${escapeHtml(message)}</span>` : ""}</span>
@@ -435,6 +509,7 @@ function renderChat() {
     ? `<span class="chat-status-line"><span class="chat-status-text ${statusClass(status)}">${escapeHtml(status)}</span>${personalMessage ? `<span class="chat-message"> - ${escapeHtml(personalMessage)}</span>` : ""}</span><span class="chat-last-seen">Last seen now</span>`
     : `<span class="chat-status-text">Offline</span>`;
   els.chatAvatar.src = avatarSrc(peer);
+  setFrameTheme(els.chatAvatar.closest(".avatar-frame"), peer);
   const messages = state.messages[peer.id] || [];
   els.messageList.innerHTML = messages.map((message) => `
     <div class="message ${message.mine ? "mine" : ""}">
@@ -659,6 +734,42 @@ async function editStatus() {
   if (result?.status) updatePresence({ status: result.status });
 }
 
+function chooseThemeDialog() {
+  els.modalTitle.textContent = "Theme";
+  els.modalMessage.textContent = "Choose the color used for your app and avatar frame.";
+  els.modalPrimary.textContent = "Done";
+  const active = currentTheme().accent.toLowerCase();
+  els.modalBody.innerHTML = `
+    <div class="theme-grid">
+      ${THEMES.map((theme) => `
+        <button class="theme-choice${theme.accent.toLowerCase() === active ? " active" : ""}" type="button" data-theme-key="${escapeHtml(theme.key)}">
+          <span class="theme-swatch" style="--swatch:${escapeHtml(theme.accent)}"></span>
+          <span>${escapeHtml(theme.label)}</span>
+        </button>
+      `).join("")}
+    </div>
+  `;
+  const clickHandler = (event) => {
+    const button = event.target.closest("[data-theme-key]");
+    if (!button) return;
+    const theme = THEMES.find((item) => item.key === button.dataset.themeKey);
+    if (!theme) return;
+    localStorage.setItem(STORAGE.theme, theme.accent);
+    state.self = { ...state.self, themeColor: theme.accent };
+    applyTheme(theme);
+    renderProfile();
+    updatePresence({ themeColor: theme.accent });
+    els.modal.close("default");
+  };
+  const closeHandler = () => {
+    els.modalBody.removeEventListener("click", clickHandler);
+    els.modal.removeEventListener("close", closeHandler);
+  };
+  els.modal.addEventListener("close", closeHandler);
+  els.modalBody.addEventListener("click", clickHandler);
+  els.modal.showModal();
+}
+
 function chooseAvatar() {
   els.avatarInput.click();
 }
@@ -794,6 +905,7 @@ els.topMenu.addEventListener("click", async (event) => {
   if (action === "displayName") editDisplayName();
   if (action === "personalMessage") editPersonalMessage();
   if (action === "status") editStatus();
+  if (action === "theme") chooseThemeDialog();
   if (action === "avatar") chooseAvatar();
   if (action === "notifications") requestNotifications();
   if (action === "blocked") manageBlockedUsers();
@@ -963,11 +1075,13 @@ if ("serviceWorker" in navigator) {
 }
 
 updateViewportSize();
+applyTheme();
 window.addEventListener("resize", updateViewportSize);
 window.visualViewport?.addEventListener("resize", updateViewportSize);
 window.visualViewport?.addEventListener("scroll", updateViewportSize);
 
 if (state.token) {
+  showLoading();
   connect();
 } else {
   showAuth();
