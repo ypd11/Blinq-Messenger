@@ -105,7 +105,56 @@ function bestName(user) {
 }
 
 function avatarSrc(user) {
-  return user?.avatar ? `data:image/png;base64,${user.avatar}` : "../assets/avatar_placeholder.png";
+  if (!user?.avatar) return "../assets/avatar_placeholder.png";
+  const value = String(user.avatar);
+  let mime = "image/png";
+  if (value.startsWith("/9j/")) mime = "image/jpeg";
+  else if (value.startsWith("UklGR")) mime = "image/webp";
+  return `data:${mime};base64,${value}`;
+}
+
+function readImage(file) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = URL.createObjectURL(file);
+  });
+}
+
+function canvasToBlob(canvas, type, quality) {
+  return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const value = String(reader.result || "");
+      resolve(value.includes(",") ? value.split(",").pop() : value);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function avatarBase64FromFile(file) {
+  const image = await readImage(file);
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext("2d");
+  const sourceSize = Math.min(image.naturalWidth || image.width, image.naturalHeight || image.height);
+  const sourceX = ((image.naturalWidth || image.width) - sourceSize) / 2;
+  const sourceY = ((image.naturalHeight || image.height) - sourceSize) / 2;
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, size, size);
+  context.drawImage(image, sourceX, sourceY, sourceSize, sourceSize, 0, 0, size, size);
+  URL.revokeObjectURL(image.src);
+  const blob = await canvasToBlob(canvas, "image/jpeg", 0.86);
+  if (!blob) throw new Error("Avatar compression failed.");
+  return blobToBase64(blob);
 }
 
 function escapeHtml(value) {
@@ -705,19 +754,21 @@ els.profileAvatarButton.addEventListener("click", chooseAvatar);
 els.avatarInput.addEventListener("change", () => {
   const file = els.avatarInput.files?.[0];
   if (!file) return;
-  if (file.size > 220000) {
-    showInfoModal("Avatar", "Choose an image smaller than 220 KB.");
+  if (file.size > 2 * 1024 * 1024) {
+    showInfoModal("Avatar", "Choose an image smaller than 2 MB.");
     els.avatarInput.value = "";
     return;
   }
-  const reader = new FileReader();
-  reader.onload = () => {
-    const value = String(reader.result || "");
-    const base64 = value.includes(",") ? value.split(",").pop() : value;
-    updatePresence({ avatar: base64 });
+  avatarBase64FromFile(file)
+    .then((base64) => {
+      updatePresence({ avatar: base64 });
+    })
+    .catch(() => {
+      showInfoModal("Avatar", "That image could not be used.");
+    })
+    .finally(() => {
     els.avatarInput.value = "";
-  };
-  reader.readAsDataURL(file);
+    });
 });
 
 els.requestsList.addEventListener("click", (event) => {

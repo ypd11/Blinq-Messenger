@@ -134,7 +134,7 @@ select:focus {
   border-radius: 8px;
   background: linear-gradient(180deg, #66c6ff, var(--accent));
   color: #ffffff;
-  font-weight: 650;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -149,7 +149,7 @@ select:focus {
   border-radius: 8px;
   background: #ffffff;
   color: #243b55;
-  font-weight: 650;
+  font-weight: 400;
 }
 
 .auth-note,
@@ -193,7 +193,7 @@ select:focus {
 .topbar-title strong {
   display: block;
   font-size: 19px;
-  font-weight: 650;
+  font-weight: 500;
   color: #082f49;
 }
 
@@ -254,7 +254,7 @@ select:focus {
   background: transparent;
   color: #0f2748;
   text-align: left;
-  font-weight: 400;
+  font-weight: 400 !important;
   cursor: pointer;
 }
 
@@ -307,7 +307,7 @@ select:focus {
   margin: 0;
   color: #0f172a;
   font-size: 23px;
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .text-link {
@@ -410,7 +410,7 @@ select:focus {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #ffffff;
-  font-weight: 650;
+  font-weight: 400;
 }
 
 .contact-panel {
@@ -430,7 +430,7 @@ select:focus {
   border-radius: 7px;
   background: linear-gradient(180deg, #ffffff, #edf6ff);
   color: #0f2748;
-  font-weight: 700;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
 }
@@ -485,7 +485,7 @@ select:focus {
 .contact-name {
   display: block;
   color: #111827;
-  font-weight: 650;
+  font-weight: 500;
   font-size: 16px;
 }
 
@@ -501,7 +501,7 @@ select:focus {
 }
 
 .contact-status {
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .contact-separator,
@@ -529,7 +529,7 @@ select:focus {
   background: var(--accent);
   color: #ffffff;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .back-button {
@@ -538,7 +538,7 @@ select:focus {
   gap: 6px;
   margin: 4px 0 10px;
   color: var(--accent-dark);
-  font-weight: 650;
+  font-weight: 400;
 }
 
 .back-button svg {
@@ -591,28 +591,28 @@ select:focus {
   border-bottom: 1px solid #dbeafe;
 }
 
-.chat-header p {
+#chat-status {
   margin: 4px 0 0;
   color: var(--muted);
   font-size: 13px;
 }
 
-.chat-status-text {
+#chat-status .chat-status-text {
   color: var(--muted);
   font-weight: 500;
 }
 
-.chat-status-text.available {
-  color: var(--green);
+#chat-status .chat-status-text.available {
+  color: var(--green) !important;
 }
 
-.chat-status-text.busy,
-.chat-status-text.away {
-  color: var(--orange);
+#chat-status .chat-status-text.busy,
+#chat-status .chat-status-text.away {
+  color: var(--orange) !important;
 }
 
-.chat-message,
-.chat-last-seen {
+#chat-status .chat-message,
+#chat-status .chat-last-seen {
   color: var(--muted);
   font-weight: 400;
 }
@@ -641,7 +641,7 @@ select:focus {
 .message-meta {
   color: var(--accent-dark);
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .message-time {
@@ -705,7 +705,7 @@ select:focus {
 .modal-card h2 {
   color: #0f2748;
   font-size: 22px;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .modal-card label {
@@ -720,7 +720,7 @@ select:focus {
 }
 
 .modal-card strong {
-  font-weight: 600;
+  font-weight: 500;
 }
 
 #modal-body {
@@ -735,7 +735,18 @@ select:focus {
 
 .about-links a {
   color: var(--accent-dark);
-  font-weight: 500;
+  font-weight: 400;
+}
+
+input,
+select,
+option,
+textarea,
+button,
+.top-menu button,
+.contact-menu button,
+.modal-card button {
+  font-weight: 400;
 }
 
 .modal-actions {

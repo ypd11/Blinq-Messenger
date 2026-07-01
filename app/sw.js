@@ -1,4 +1,4 @@
-const CACHE_NAME = "blinq-web-v6";
+const CACHE_NAME = "blinq-web-v7";
 const ASSETS = [
   "./",
   "index.html",
