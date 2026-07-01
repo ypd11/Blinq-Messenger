@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Blinq Messenger Web</title>
+  <meta name="description" content="Blinq Messenger web app for Internet Mode chat.">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#1d9bf0">
+  <link rel="icon" href="../assets/appicon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <section class="auth-card" id="auth-view">
+      <img class="auth-icon" src="../assets/appicon.ico" alt="">
+      <h1>Blinq Messenger</h1>
+      <p>Internet Mode for iPhone and web browsers.</p>
+      <form id="login-form" class="auth-form">
+        <label>
+          Blinq ID
+          <input id="login-username" autocomplete="username" placeholder="username or username@blinqm.net" required>
+        </label>
+        <label>
+          Password
+          <input id="login-password" type="password" autocomplete="current-password" required>
+        </label>
+        <button class="primary-button" type="submit">Sign In</button>
+      </form>
+      <p class="auth-note">This first web version supports Internet Mode private chat. LAN Mode, images, drawings, and rich editor tools stay in the desktop and Android apps for now.</p>
+      <p class="status-line" id="auth-status"></p>
+    </section>
+
+    <section class="main-view hidden" id="main-view">
+      <header class="topbar">
+        <div class="topbar-title">
+          <img src="../assets/appicon.ico" alt="">
+          <div>
+            <strong>Blinq Messenger</strong>
+            <span id="connection-label">Disconnected</span>
+          </div>
+        </div>
+        <button class="icon-button" id="sign-out-button" type="button" aria-label="Sign out">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.09 15.59 11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67zM19 3H9c-1.1 0-2 .9-2 2v4h2V5h10v14H9v-4H7v4c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2"/></svg>
+        </button>
+      </header>
+
+      <section class="profile-panel">
+        <div class="avatar-frame">
+          <img id="profile-avatar" src="../assets/avatar_placeholder.png" alt="">
+        </div>
+        <div class="profile-text">
+          <h2 id="profile-name">Blinq User</h2>
+          <p id="profile-message">Hi, let's chat!</p>
+          <div class="status-dot-row"><span class="status-dot"></span><strong id="profile-status">Available</strong></div>
+        </div>
+      </section>
+
+      <section class="contacts-view" id="contacts-view">
+        <div class="section-title">
+          <h2>Contacts</h2>
+          <span id="contact-count">0 total</span>
+        </div>
+        <form class="add-contact" id="add-contact-form">
+          <input id="add-contact-input" placeholder="Add Blinq ID">
+          <button type="submit">Add</button>
+        </form>
+        <div id="requests-list" class="requests-list"></div>
+        <div class="contact-panel" id="contact-list"></div>
+      </section>
+
+      <section class="chat-view hidden" id="chat-view">
+        <button class="back-button" id="back-button" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.42-1.41L7.83 13H20z"/></svg>
+          Contacts
+        </button>
+        <div class="chat-header">
+          <div class="avatar-frame small">
+            <img id="chat-avatar" src="../assets/avatar_placeholder.png" alt="">
+          </div>
+          <div>
+            <h2 id="chat-name">Contact</h2>
+            <p id="chat-status">Offline</p>
+          </div>
+        </div>
+        <div class="message-list" id="message-list"></div>
+        <form class="composer" id="message-form">
+          <input id="message-input" placeholder="Message" autocomplete="off">
+          <button class="send-button" type="submit" aria-label="Send message">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 21 23 12 2 3v7l15 2-15 2z"/></svg>
+          </button>
+        </form>
+      </section>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

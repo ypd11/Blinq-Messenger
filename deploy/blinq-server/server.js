@@ -3,11 +3,14 @@
 const crypto = require("crypto");
 const fs = require("fs");
 const https = require("https");
+const http = require("http");
 const net = require("net");
 const path = require("path");
 const Database = require("better-sqlite3");
+const { WebSocketServer } = require("ws");
 
 const PORT = Number(process.env.BLINQ_SERVER_PORT || 45476);
+const WEB_PORT = Number(process.env.BLINQ_WEB_PORT || 45477);
 const DATA_DIR = process.env.BLINQ_DATA_DIR || "/opt/blinq-server/data";
 const UPLOAD_DIR = process.env.BLINQ_UPLOAD_DIR || "/opt/blinq-server/uploads";
 const FIREBASE_SERVICE_ACCOUNT_PATH = process.env.BLINQ_FIREBASE_SERVICE_ACCOUNT || "/opt/blinq-server/firebase-service-account.json";
@@ -1284,44 +1287,52 @@ function handleMessage(socket, msg) {
   }
 }
 
-function handleConnection(socket) {
-  socket.setEncoding("utf8");
-  socket.setKeepAlive(true, 30000);
+function initializeClient(socket) {
   socket.buffer = "";
   socket.userId = "";
   socket.lastPongAt = Date.now();
+}
 
-  socket.on("data", (chunk) => {
-    socket.buffer += chunk;
-    if (Buffer.byteLength(socket.buffer, "utf8") > MAX_LINE_BYTES) {
-      sendError(socket, "too_large", "Message is too large.");
-      socket.destroy();
-      return;
+function handleClientData(socket, chunk) {
+  socket.buffer += chunk;
+  if (Buffer.byteLength(socket.buffer, "utf8") > MAX_LINE_BYTES) {
+    sendError(socket, "too_large", "Message is too large.");
+    socket.destroy();
+    return;
+  }
+  let newline;
+  while ((newline = socket.buffer.indexOf("\n")) >= 0) {
+    const line = socket.buffer.slice(0, newline).trim();
+    socket.buffer = socket.buffer.slice(newline + 1);
+    if (!line) continue;
+    try {
+      handleMessage(socket, JSON.parse(line));
+    } catch (error) {
+      console.log("request error:", error.message);
+      sendError(socket, "bad_request", "Invalid request.");
     }
-    let newline;
-    while ((newline = socket.buffer.indexOf("\n")) >= 0) {
-      const line = socket.buffer.slice(0, newline).trim();
-      socket.buffer = socket.buffer.slice(newline + 1);
-      if (!line) continue;
-      try {
-        handleMessage(socket, JSON.parse(line));
-      } catch (error) {
-        console.log("request error:", error.message);
-        sendError(socket, "bad_request", "Invalid request.");
-      }
-    }
-  });
+  }
+}
 
-  socket.on("close", () => {
-    if (socket.userId && clientsByUserId.get(socket.userId) === socket) {
-      clientsByUserId.delete(socket.userId);
-      const user = findUserById(socket.userId);
-      if (user) {
-        statements.updateUserOnline.run("Offline", now(), user.id);
-        broadcastEffectivePresence(findUserById(user.id));
-      }
+function handleClientClose(socket) {
+  if (socket.userId && clientsByUserId.get(socket.userId) === socket) {
+    clientsByUserId.delete(socket.userId);
+    const user = findUserById(socket.userId);
+    if (user) {
+      statements.updateUserOnline.run("Offline", now(), user.id);
+      broadcastEffectivePresence(findUserById(user.id));
     }
-  });
+  }
+}
+
+function handleConnection(socket) {
+  socket.setEncoding("utf8");
+  socket.setKeepAlive(true, 30000);
+  initializeClient(socket);
+
+  socket.on("data", (chunk) => handleClientData(socket, chunk));
+
+  socket.on("close", () => handleClientClose(socket));
 
   socket.on("error", (error) => {
     if (!isRoutineSocketError(error)) {
@@ -1330,7 +1341,59 @@ function handleConnection(socket) {
   });
 }
 
+function websocketClient(ws, request) {
+  const client = {
+    buffer: "",
+    userId: "",
+    sessionToken: "",
+    lastPongAt: Date.now(),
+    remoteAddress: request.socket.remoteAddress,
+    destroyed: false,
+    write(data) {
+      if (ws.readyState === 1) {
+        ws.send(String(data).trimEnd());
+      }
+    },
+    end() {
+      this.destroyed = true;
+      ws.close();
+    },
+    destroy() {
+      this.destroyed = true;
+      ws.terminate();
+    }
+  };
+  initializeClient(client);
+
+  ws.on("message", (data) => {
+    if (client.destroyed) return;
+    handleClientData(client, `${data.toString()}\n`);
+  });
+
+  ws.on("close", () => {
+    client.destroyed = true;
+    handleClientClose(client);
+  });
+
+  ws.on("error", (error) => {
+    if (!isRoutineSocketError(error)) {
+      console.log("websocket error:", error.message);
+    }
+  });
+}
+
 const server = net.createServer(handleConnection);
+const webServer = http.createServer((request, response) => {
+  if (request.url === "/health") {
+    response.writeHead(200, { "Content-Type": "application/json" });
+    response.end(JSON.stringify({ ok: true, service: "blinq-websocket", time: now() }));
+    return;
+  }
+  response.writeHead(404, { "Content-Type": "text/plain" });
+  response.end("Not found");
+});
+const websocketServer = new WebSocketServer({ server: webServer, path: "/ws" });
+websocketServer.on("connection", websocketClient);
 
 cleanupOldUploads();
 cleanupExpiredQueuedMessages();
@@ -1355,4 +1418,8 @@ if (typeof heartbeatTimer.unref === "function") heartbeatTimer.unref();
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`Blinq server listening on ${PORT}`);
+});
+
+webServer.listen(WEB_PORT, "127.0.0.1", () => {
+  console.log(`Blinq websocket bridge listening on ${WEB_PORT}`);
 });
