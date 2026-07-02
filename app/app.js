@@ -73,6 +73,8 @@ const state = {
   blocked: new Set(),
   blockedInfo: {},
   whistleTimer: 0,
+  statusRestoreTimer: 0,
+  connectionStatus: { message: "Disconnected", isError: false },
   notificationsEnabled: localStorage.getItem(STORAGE.notifications) === "1"
 };
 
@@ -257,10 +259,20 @@ function saveMessages() {
   saveJson(STORAGE.messages, state.messages);
 }
 
-function setStatus(message, isError = false) {
+function setStatus(message, isError = false, temporary = false) {
+  clearTimeout(state.statusRestoreTimer);
   els.authStatus.textContent = message || "";
   els.authStatus.style.color = isError ? "#dc2626" : "#64748b";
   els.connectionLabel.textContent = message || "Disconnected";
+  if (!temporary) {
+    state.connectionStatus = { message: message || "Disconnected", isError };
+    return;
+  }
+  state.statusRestoreTimer = window.setTimeout(() => {
+    els.authStatus.textContent = state.connectionStatus.message || "";
+    els.authStatus.style.color = state.connectionStatus.isError ? "#dc2626" : "#64748b";
+    els.connectionLabel.textContent = state.connectionStatus.message || "Disconnected";
+  }, 3500);
 }
 
 function connect() {
@@ -363,7 +375,7 @@ function handleMessage(message) {
       markMessageSent(message.message);
       break;
     case "feedbackSent":
-      setStatus("Feedback sent");
+      setStatus("Feedback sent", false, true);
       break;
     case "receipt":
       break;
@@ -729,7 +741,7 @@ async function editPersonalMessage() {
 async function editStatus() {
   const result = await showPromptModal({
     title: "Status",
-    fields: [{ label: "Status", name: "status", type: "select", value: state.self?.status || "Available", options: ["Available", "Busy", "Away", "Idle", "Invisible"] }]
+    fields: [{ label: "Current presence", name: "status", type: "select", value: state.self?.status || "Available", options: ["Available", "Busy", "Away", "Idle", "Invisible"] }]
   });
   if (result?.status) updatePresence({ status: result.status });
 }
@@ -821,7 +833,7 @@ function blockPeer(peer) {
   if (state.selectedPeerId === peer.id) state.selectedPeerId = "";
   renderContacts();
   renderChat();
-  setStatus(`${bestName(peer)} blocked.`);
+  setStatus(`${bestName(peer)} blocked.`, false, true);
 }
 
 function unblockPeer(peerId) {
@@ -882,6 +894,15 @@ function toggleTopMenu(force) {
   const shouldOpen = typeof force === "boolean" ? force : els.topMenu.classList.contains("hidden");
   els.topMenu.classList.toggle("hidden", !shouldOpen);
   els.topMenuButton.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
+}
+
+function isMenuOpen() {
+  return !els.topMenu.classList.contains("hidden") || !els.contactMenu.classList.contains("hidden");
+}
+
+function closeMenus() {
+  toggleTopMenu(false);
+  closeContactMenu();
 }
 
 els.loginForm.addEventListener("submit", (event) => {
@@ -950,6 +971,12 @@ els.requestsList.addEventListener("click", (event) => {
 });
 
 els.contactList.addEventListener("click", (event) => {
+  if (isMenuOpen()) {
+    closeMenus();
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
   if (state.suppressNextContactClick) {
     state.suppressNextContactClick = false;
     event.preventDefault();
@@ -1029,6 +1056,15 @@ els.contactMenu.addEventListener("click", async (event) => {
     }
   }
 });
+
+document.addEventListener("click", (event) => {
+  const insideMenu = event.target.closest("#top-menu") || event.target.closest("#top-menu-button") || event.target.closest("#contact-menu");
+  if (!insideMenu && isMenuOpen()) {
+    closeMenus();
+    event.preventDefault();
+    event.stopPropagation();
+  }
+}, true);
 
 document.addEventListener("click", (event) => {
   if (!event.target.closest("#top-menu") && !event.target.closest("#top-menu-button")) toggleTopMenu(false);

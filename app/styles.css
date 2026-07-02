@@ -33,6 +33,7 @@ body {
   overflow: hidden;
   color: var(--ink);
   font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  user-select: none;
   background:
     radial-gradient(circle at top left, rgba(29, 155, 240, 0.18), transparent 34%),
     linear-gradient(180deg, #ffffff 0, var(--window) 52%, #ffffff 100%);
@@ -46,6 +47,16 @@ select {
 
 button {
   -webkit-tap-highlight-color: transparent;
+}
+
+input,
+select,
+textarea,
+.message-list,
+.message,
+.message-body,
+.message-meta {
+  user-select: text;
 }
 
 .hidden {
@@ -905,6 +916,10 @@ textarea,
 }
 
 @media (max-width: 780px) {
+  :root {
+    --mobile-edge: max(30px, calc(env(safe-area-inset-top) + 10px), calc(env(safe-area-inset-bottom) + 10px));
+  }
+
   body {
     background: var(--window);
   }
@@ -912,8 +927,8 @@ textarea,
   .app-shell {
     padding-right: 10px;
     padding-left: 10px;
-    padding-top: max(30px, calc(env(safe-area-inset-top) + 10px));
-    padding-bottom: 0;
+    padding-top: var(--mobile-edge);
+    padding-bottom: var(--mobile-edge);
     background: var(--window);
     height: var(--app-height);
   }
@@ -984,7 +999,7 @@ textarea,
   .chat-content {
     height: 100%;
     min-height: 0;
-    inset: 10px 10px max(72px, calc(env(safe-area-inset-bottom) + 18px)) 10px;
+    inset: 10px;
   }
 
   .message-list {
