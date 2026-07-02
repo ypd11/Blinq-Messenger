@@ -956,10 +956,11 @@ textarea,
   }
 
   .content-grid {
-    display: block;
+    display: flex;
+    flex-direction: column;
     flex: 1 1 auto;
-    height: auto;
     min-height: 0;
+    overflow: hidden;
   }
 
   .main-view.chat-open .profile-panel {
@@ -987,12 +988,12 @@ textarea,
   }
 
   .contacts-view {
-    height: 100%;
+    flex: 1 1 auto;
     min-height: 0;
   }
 
   .chat-view {
-    height: 100%;
+    flex: 1 1 auto;
     min-height: 0;
   }
 
